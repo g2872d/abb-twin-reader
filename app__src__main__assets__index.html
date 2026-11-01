@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0d1014">
+<title>ABB Digital Twin · 逐行讲解</title>
+<style>
+:root{
+  --bg:#0d1014;--bg2:#12161d;--bg3:#171c25;--bg4:#1c2430;--line:#232a36;
+  --fg:#c9d3e0;--fg2:#8b9ab0;--fg3:#5a6779;
+  --acc:#4a9eff;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--vio:#bc8cff;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,"Roboto Mono","DejaVu Sans Mono",monospace;
+  --fs:12.5px;
+  --sat:env(safe-area-inset-top,0px);
+  --sab:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  background:var(--bg);color:var(--fg);font:14px/1.55 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+select{font:inherit;color:var(--fg);background:var(--bg3);border:1px solid var(--line);border-radius:7px;padding:5px 8px}
+.hide{display:none !important}
+
+/* ---------- 顶栏 ---------- */
+header{flex:0 0 auto;padding:calc(var(--sat) + 8px) 12px 0;background:linear-gradient(180deg,#151a23,#0e1218);border-bottom:1px solid var(--line);z-index:20}
+.hrow{display:flex;align-items:center;gap:8px}
+h1{margin:0;font-size:15px;font-weight:600;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 0 auto;max-width:58%}
+h1 b{color:var(--acc);font-weight:600}
+.ctx{color:var(--fg3);font-size:11.5px;font-family:var(--mono);flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.ibtn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto}
+.ibtn:active{background:var(--bg4)}
+#subbar{display:flex;gap:8px;align-items:center;padding:8px 0 9px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+#subbar::-webkit-scrollbar{display:none}
+.chips{display:flex;gap:6px;flex:1 1 auto}
+.chip{flex:0 0 auto;padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:var(--bg2);color:var(--fg2);font:11.5px/1 var(--mono);white-space:nowrap}
+.chip.on{background:#17233a;color:var(--acc);border-color:#2a4a74}
+#toolPanel{padding:6px 0 10px;border-top:1px dashed var(--line);margin-top:2px}
+.trow{display:flex;flex-wrap:wrap;gap:7px;align-items:center;padding:4px 0}
+.trow .lbl{color:var(--fg3);font-size:11.5px;margin-right:2px}
+.sw{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg2);font-size:12px;color:var(--fg2)}
+.sw.on{background:#17233a;color:var(--acc);border-color:#2a4a74}
+.stepper{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.stepper button{padding:6px 11px;background:var(--bg2);font-family:var(--mono);font-size:12px}
+.stepper button:active{background:var(--bg4)}
+
+/* ---------- 视图容器 ---------- */
+main{flex:1 1 auto;position:relative;overflow:hidden}
+.view{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px 24px}
+.view[hidden]{display:none !important}
+
+/* ---------- 底部页签 ---------- */
+nav#tabs{flex:0 0 auto;display:flex;background:#0b0e12;border-top:1px solid var(--line);padding-bottom:var(--sab);z-index:20}
+nav#tabs button{flex:1 1 0;padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--fg3);font-size:10.5px}
+nav#tabs button i{font-style:normal;font-size:17px;line-height:1}
+nav#tabs button.on{color:var(--acc)}
+
+/* ---------- 通用卡片 ---------- */
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 10px}
+.card h2{font-size:13px;margin:0 0 8px;color:var(--fg);display:flex;align-items:center;gap:6px}
+.card h2 em{font-style:normal;color:var(--acc);font-family:var(--mono);font-size:11px}
+.tip{color:var(--fg3);font-size:12px;margin:0 0 8px}
+.kv{display:grid;grid-template-columns:88px 1fr;gap:5px 10px;font-size:12.5px}
+.kv dt{color:var(--fg3)}
+.kv dd{margin:0;color:var(--fg);word-break:break-word}
+.mono{font-family:var(--mono)}
+.pill{display:inline-block;padding:1px 7px;border-radius:999px;font:11px/1.7 var(--mono);border:1px solid var(--line);color:var(--fg2);background:var(--bg3)}
+.pill.ok{color:var(--ok);border-color:#1d4429;background:#0f2016}
+.pill.bad{color:var(--bad);border-color:#5a1d1d;background:#200f0f}
+.pill.warn{color:var(--warn);border-color:#4a3a12;background:#1e1810}
+.pill.acc{color:var(--acc);border-color:#22405f;background:#101a26}
+.jump{border:1px dashed #2b3d55;color:var(--acc);border-radius:8px;padding:3px 8px;font:11.5px var(--mono);background:#0f1722}
+
+/* 首页 */
+.hero{background:linear-gradient(160deg,#17202c,#101720);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+.hero p{margin:0 0 8px;font-size:13.5px;line-height:1.65}
+.hero p:last-child{margin:0}
+.hero b{color:#e6edf7}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
+.flist{display:flex;flex-direction:column;gap:6px}
+.fitem{display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg3);flex-wrap:wrap}
+.fitem .fn{font:12.5px var(--mono);color:var(--fg);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fitem .fl{font:11px var(--mono);color:var(--fg3);flex:0 0 auto;white-space:nowrap}
+.fitem .fr{flex:1 1 100%;order:3;color:var(--fg3);font-size:11.5px;margin-top:-2px}
+.flow{display:flex;flex-direction:column;gap:0}
+.fstep{display:grid;grid-template-columns:26px 1fr;gap:9px;align-items:start;padding:7px 0}
+.fstep .dot{width:24px;height:24px;border-radius:50%;background:#152238;border:1px solid #2b4a70;color:var(--acc);font:11px/24px var(--mono);text-align:center}
+.fstep .tt{font-size:12.5px}
+.fstep .ds{color:var(--fg3);font-size:11.5px}
+.fstep:not(:last-child) .dot::after{content:"";display:block}
+.concl{counter-reset:c;display:flex;flex-direction:column;gap:7px}
+.concl .c-item{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start;padding:8px 9px;border:1px solid var(--line);border-radius:10px;background:var(--bg3)}
+.concl .c-item em{font:11px/18px var(--mono);color:var(--fg3);font-style:normal;text-align:center}
+
+/* ---------- 代码视图 ---------- */
+#codeWrap{padding:0 0 30px}
+.blk{margin:0 0 10px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg2)}
+.blk-h{display:flex;align-items:baseline;gap:7px;padding:9px 10px;background:#141a24;border-bottom:1px solid var(--line);cursor:pointer}
+.bk-caret{color:var(--acc);font-size:11px;transition:transform .15s;flex:0 0 auto}
+.blk.folded .bk-caret{transform:rotate(-90deg)}
+.bk-t{font-size:12.5px;color:#dfe8f4;font-weight:600;flex:0 0 auto}
+.bk-b{font-size:11.5px;color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
+.bk-r{font:10.5px var(--mono);color:var(--fg3);flex:0 0 auto}
+.blk-d{padding:9px 11px;border-bottom:1px solid var(--line);background:#101620;font-size:12.5px;color:var(--fg2);line-height:1.7}
+.blk-d p{margin:0 0 7px}
+.blk-d p:last-child{margin:0}
+.blk-d .api,.blk-d .gotcha{margin-top:7px;padding:7px 9px;border-radius:8px;font-size:12px;line-height:1.65}
+.blk-d .api{background:#0e1a28;border-left:2px solid var(--acc);color:#a8c4e0}
+.blk-d .api b{color:var(--acc);font-family:var(--mono);font-size:11px;margin-right:6px}
+.blk-d .gotcha{background:#1e1410;border-left:2px solid var(--warn);color:#d9bb8a}
+.blk-d .gotcha b{color:var(--warn);font-size:11px;margin-right:6px}
+.blk.folded .lns,.blk.folded .blk-d{display:none}
+.lns{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+.ln{display:flex;min-height:1.55em;font:var(--fs)/1.62 var(--mono);position:relative;border-left:2px solid transparent}
+.ln .g{flex:0 0 34px;text-align:right;padding-right:8px;color:#3c4757;user-select:none;font-size:.92em;line-height:1.62}
+.ln .c{flex:0 0 auto;white-space:pre;padding-right:14px;color:#c3cddb}
+.ln.has .g{color:var(--acc);opacity:.85}
+.ln.has .c{box-shadow:inset 0 -1px 0 rgba(74,158,255,.16)}
+.ln.on{background:#17233a;border-left-color:var(--acc)}
+.ln.flash{animation:fl 1.1s ease-out}
+@keyframes fl{0%{background:#1f3d63}100%{background:transparent}}
+.ln-note{padding:2px 10px 6px 44px;font:12px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#8fa3bb;border-left:2px solid #1d2733;background:#0f141c}
+.ln-note i{color:var(--acc);font-style:normal;margin-right:4px}
+.ln-note .d{display:block;color:var(--fg3);margin-top:3px}
+.kw{color:#c792ea}.ty{color:#7fdbca}.st{color:#ecc48d}.cm{color:#5c6b7e;font-style:italic}.nm{color:#f78c6c}.at{color:#ffcb6b}
+/* 块地图 */
+.bmap{display:flex;flex-direction:column;gap:6px}
+.bmap button{text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg3);display:flex;gap:8px;align-items:baseline}
+.bmap button .r{font:10.5px var(--mono);color:var(--fg3);flex:0 0 auto}
+.bmap button .t{font-size:12.5px;color:var(--fg)}
+
+/* ---------- 概念视图 ---------- */
+.pair{display:grid;grid-template-columns:1fr;gap:8px}
+.pcard{border:1px solid var(--line);border-radius:11px;background:var(--bg2);padding:11px}
+.pcard h3{margin:0 0 6px;font-size:13px;color:#e3ecf7}
+.pcard p{margin:0 0 6px;font-size:12.5px;color:var(--fg2);line-height:1.7}
+.pcard .ex{font:11.5px var(--mono);color:var(--fg3)}
+.rel{display:flex;flex-direction:column;gap:8px}
+.rel-item{border:1px solid var(--line);border-radius:10px;background:var(--bg3);padding:9px 10px}
+.rel-item .lr{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font:11.5px var(--mono);color:var(--fg2)}
+.rel-item .lb{color:var(--fg3);font-size:11.5px;margin-top:5px;line-height:1.6}
+
+/* ---------- 模拟视图 ---------- */
+.simbar{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:9px}
+.stage{position:relative;width:100%;overflow:hidden;border-radius:10px;border:1px solid var(--line);background:#f0f0f0}
+.stage .f1{position:absolute;top:0;left:0;width:966px;height:569px;transform-origin:0 0;background:#f0f0f0;color:#000;font:12px "Microsoft YaHei",sans-serif}
+.f1 .w{position:absolute;background:#fff;border:1px solid #8c8c8c;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;user-select:none}
+.f1 .w.btn{background:linear-gradient(#fdfdfd,#e8e8e8);border-color:#707070;font-size:13px}
+.f1 .w.btn:active{background:#d8e6f7}
+.f1 .w.btn.hot{outline:2px solid #0a84ff;outline-offset:-2px}
+.f1 .w.lb{border:0;background:transparent;justify-content:flex-end;padding-right:4px;font-size:13px;cursor:default}
+.f1 .w.tb{background:#fff;justify-content:flex-start;padding:0 5px;font:13px "Microsoft YaHei",sans-serif}
+.f1 .w.lst{background:#fff;display:block;padding:3px 5px;font:12px/20px "Microsoft YaHei",sans-serif;overflow:auto;white-space:pre;color:#222;justify-content:flex-start;align-items:flex-start}
+.f1 .w.lst.sel{background:#cfe3ff}
+.f1 .w.menu{justify-content:flex-start;padding:0 6px;background:#f7f7f7;border-bottom:1px solid #c8c8c8;font-size:12px}
+.f1 .w.title{justify-content:flex-start;padding:0 8px;font-size:12px;color:#555;background:#f0f0f0;border-bottom:1px solid #d8d8d8}
+.f1 .w.title b{color:#222;font-weight:600}
+.f1 .hint{position:absolute;left:0;right:0;top:400px;text-align:center;color:#9aa4b2;font-size:13px}
+.readout{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:10px 0 0}
+.ro{border:1px solid var(--line);border-radius:10px;background:var(--bg3);padding:8px 6px;text-align:center}
+.ro .k{font:11px var(--mono);color:var(--fg3)}
+.ro .v{font:16px/1.35 var(--mono);color:#e6eef8;overflow:hidden;text-overflow:ellipsis}
+.ro.dead .v{color:var(--bad)}
+.ex ec{display:block}
+.exec{border:1px solid #2b4a70;background:#0f1a2a;border-radius:10px;padding:9px 10px;margin-top:10px;font-size:12.5px}
+.exec .who{font:11.5px var(--mono);color:var(--acc)}
+.exec .what{color:#b8c7da;margin-top:3px;line-height:1.6}
+.logbox{margin-top:9px;border:1px solid var(--line);border-radius:10px;background:#0b0f14;padding:8px 9px;font:11.5px/1.7 var(--mono);color:#8fa3bb;max-height:150px;overflow:auto;white-space:pre-wrap}
+
+/* ---------- 问题清单 ---------- */
+.it{border:1px solid var(--line);border-radius:11px;background:var(--bg2);padding:11px;margin-bottom:9px}
+.it .hd{display:flex;gap:7px;align-items:center;margin-bottom:6px}
+.it .hd .t{font-size:13px;color:#e6eef8;font-weight:600;flex:1 1 auto;line-height:1.45}
+.it p{margin:0 0 7px;font-size:12.5px;color:var(--fg2);line-height:1.7}
+.it .fix{font-size:12px;color:#9fd6a8;background:#0f1f15;border-left:2px solid var(--ok);padding:7px 9px;border-radius:8px;line-height:1.65}
+.it .loc{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+
+/* ---------- 抽屉 ---------- */
+#mask{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;opacity:0;pointer-events:none;transition:opacity .18s}
+#mask.on{opacity:1;pointer-events:auto}
+#sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#111721;border-top:1px solid #2a3546;border-radius:16px 16px 0 0;max-height:78vh;display:flex;flex-direction:column;transform:translateY(105%);transition:transform .22s cubic-bezier(.22,.8,.3,1);padding-bottom:var(--sab);box-shadow:0 -12px 40px rgba(0,0,0,.6)}
+#sheet.on{transform:translateY(0)}
+.sh-h{display:flex;align-items:center;gap:8px;padding:10px 12px 8px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.sh-h .who{font:12px var(--mono);color:var(--acc);flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sh-h .x{width:30px;height:30px;border-radius:8px;background:var(--bg3);border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
+.sh-b{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px 12px}
+.sh-b pre.code{margin:0 0 9px;padding:8px 10px;background:#0a0e13;border:1px solid var(--line);border-radius:8px;overflow-x:auto;font:12px/1.6 var(--mono);color:#c3cddb;white-space:pre-wrap;word-break:break-word}
+.sh-note{font-size:14px;line-height:1.75;color:#dbe6f3}
+.sh-note .d{display:block;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);color:var(--fg2);font-size:13px}
+.sh-blk{margin-top:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg3);padding:9px 10px}
+.sh-blk .bt{font-size:12.5px;color:#e6eef8;margin-bottom:4px}
+.sh-blk .bd{font-size:12px;color:var(--fg2);line-height:1.7}
+.sh-f{padding:8px 12px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;flex:0 0 auto}
+.sh-f .nav{flex:1 1 0;padding:9px 0;text-align:center;border:1px solid var(--line);border-radius:9px;background:var(--bg3);font-size:12.5px;color:var(--fg2)}
+.sh-f .nav:active{background:var(--bg4)}
+.sh-f .nav[disabled]{opacity:.4}
+
+/* ---------- 搜索 ---------- */
+#searchWrap{position:fixed;inset:0;z-index:60;background:#0c1016;display:flex;flex-direction:column;padding-top:var(--sat)}
+#searchWrap .top{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+#searchWrap input{flex:1 1 auto;font:14px var(--mono);color:var(--fg);background:var(--bg3);border:1px solid var(--line);border-radius:9px;padding:9px 11px;outline:none}
+#searchWrap .res{flex:1 1 auto;overflow-y:auto;padding:10px 12px 30px}
+.sr{padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);margin-bottom:7px}
+.sr .lc{font:11px var(--mono);color:var(--acc);margin-bottom:3px}
+.sr .cd{font:11.5px var(--mono);color:#b9c6d6;white-space:pre;overflow:hidden;text-overflow:ellipsis}
+.sr .nt{font-size:12px;color:var(--fg3);margin-top:4px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.empty{color:var(--fg3);font-size:12.5px;padding:14px;text-align:center}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <h1>ABB Digital Twin <b>逐行讲解</b></h1>
+    <span class="ctx" id="ctxName"></span>
+    <button class="ibtn" id="btnSearch" aria-label="搜索">🔍</button>
+  </div>
+  <div id="subbar" class="hide">
+    <div class="chips" id="fileChips"></div>
+    <button class="ibtn" id="btnTools" aria-label="显示选项">⚙</button>
+  </div>
+  <div id="toolPanel" class="hide">
+    <div class="trow">
+      <span class="lbl">逐行注释</span>
+      <button class="sw" id="swInline">行下直接显示</button>
+      <button class="sw" id="swAll">展开全部块说明</button>
+    </div>
+    <div class="trow">
+      <span class="lbl">字号</span>
+      <span class="stepper"><button id="fsDown">A−</button><button id="fsUp">A+</button></span>
+      <span class="lbl" style="margin-left:6px">本文件块地图</span>
+      <button class="sw" id="swMap">展开</button>
+    </div>
+    <div id="bmapWrap" class="hide"><div class="bmap" id="bmap"></div></div>
+  </div>
+</header>
+
+<main>
+  <section class="view" id="v-home"></section>
+  <section class="view" id="v-code" hidden><div id="codeWrap"></div></section>
+  <section class="view" id="v-concept" hidden></section>
+  <section class="view" id="v-sim" hidden></section>
+  <section class="view" id="v-issues" hidden></section>
+</main>
+
+<nav id="tabs">
+  <button data-tab="home"><i>◎</i>总览</button>
+  <button data-tab="code"><i>⌨</i>逐行</button>
+  <button data-tab="concept"><i>◇</i>概念</button>
+  <button data-tab="sim"><i>▶</i>模拟</button>
+  <button data-tab="issues"><i>!</i>问题</button>
+</nav>
+
+<div id="mask"></div>
+<div id="sheet">
+  <div class="sh-h">
+    <span class="who" id="shWho"></span>
+    <button class="x" id="shClose">✕</button>
+  </div>
+  <div class="sh-b" id="shBody"></div>
+  <div class="sh-f">
+    <button class="nav" id="shPrev">⟨ 上一行</button>
+    <button class="nav" id="shNext">下一行 ⟩</button>
+  </div>
+</div>
+
+<div id="searchWrap" class="hide">
+  <div class="top">
+    <input id="q" type="search" placeholder="搜代码 / 搜讲解，例如 GetPosition、四元数" autocomplete="off">
+    <button class="ibtn" id="qClose">✕</button>
+  </div>
+  <div class="res" id="qRes"><div class="empty">输入关键词开始搜索（支持代码与讲解文本）</div></div>
+</div>
+
+<script id="DATA" type="application/json">{"files":[{"id":"program","name":"Program.cs","lines":22,"role":"程序入口（Main）","layer":"启动层","src":"using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing System.Threading.Tasks;\nusing System.Windows.Forms;\n\nnamespace ABB_Digital_Twin\n{\n    internal static class Program\n    {\n        /// <summary>\n        /// 应用程序的主入口点。\n        /// <\/summary>\n        [STAThread]\n        static void Main()\n        {\n            Application.EnableVisualStyles();\n            Application.SetCompatibleTextRenderingDefault(false);\n            Application.Run(new Form1());\n        }\n    }\n}"},{"id":"class1","name":"Class1.cs","lines":12,"role":"模板残留的空类","layer":"死代码","src":"using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing System.Text;\nusing System.Threading.Tasks;\n\nnamespace ABB_Digital_Twin\n{\n    internal class Class1\n    {\n    }\n}"},{"id":"pose","name":"AbbRobotPoseData.cs","lines":29,"role":"DTO：14 个字段","layer":"数据层","src":"using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing System.Text;\nusing System.Threading.Tasks;\n\nnamespace ABB_Digital_Twin\n{\n    public class AbbRobotPoseData\n    {\n        public double J1 { get; set; }\n        public double J2 { get; set; }\n        public double J3 { get; set; }\n        public double J4 { get; set; }\n        public double J5 { get; set; }\n        public double J6 { get; set; }\n\n        public double TcpX { get; set; }\n        public double TcpY { get; set; }\n        public double TcpZ { get; set; }\n\n        public double Q1 { get; set; }\n        public double Q2 { get; set; }\n        public double Q3 { get; set; }\n        public double Q4 { get; set; }\n\n        public string MechanicalUnitName { get; set; }\n    }\n}"},{"id":"reader","name":"AbbRobotPoseReader.cs","lines":74,"role":"读关节角 + TCP 位姿","layer":"数据层","src":"using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing System.Text;\nusing System.Threading.Tasks;\nusing ABB.Robotics.Controllers;\nusing ABB.Robotics.Controllers.MotionDomain;\nusing ABB.Robotics.Controllers.RapidDomain;\n\nnamespace ABB_Digital_Twin\n{\n    public class AbbRobotPoseReader\n    {\n        public bool ReadRobotPose(Controller controller, out AbbRobotPoseData poseData, out string message)\n        {\n            poseData = null;\n            message = \"\";\n\n            try\n            {\n                if (controller == null)\n                {\n                    message = \"请先连接 ABB 控制器。\";\n                    return false;\n                }\n\n                // 获取当前活动机械单元\n                MechanicalUnit mechUnit = controller.MotionSystem.ActiveMechanicalUnit;\n\n                if (mechUnit == null)\n                {\n                    message = \"没有找到当前活动机械单元。\";\n                    return false;\n                }\n\n                // 读取六轴关节角\n                JointTarget jointTarget = mechUnit.GetPosition();\n                RobJoint robJoint = jointTarget.RobAx;\n\n                // 读取 TCP 位姿，World 表示世界坐标系\n                RobTarget robTarget = mechUnit.GetPosition(CoordinateSystemType.World);\n\n                poseData = new AbbRobotPoseData();\n\n                poseData.MechanicalUnitName = mechUnit.Name;\n\n                poseData.J1 = robJoint.Rax_1;\n                poseData.J2 = robJoint.Rax_2;\n                poseData.J3 = robJoint.Rax_3;\n                poseData.J4 = robJoint.Rax_4;\n                poseData.J5 = robJoint.Rax_5;\n                poseData.J6 = robJoint.Rax_6;\n\n                poseData.TcpX = robTarget.Trans.X;\n                poseData.TcpY = robTarget.Trans.Y;\n                poseData.TcpZ = robTarget.Trans.Z;\n\n                poseData.Q1 = robTarget.Rot.Q1;\n                poseData.Q2 = robTarget.Rot.Q2;\n                poseData.Q3 = robTarget.Rot.Q3;\n                poseData.Q4 = robTarget.Rot.Q4;\n\n                message = \"读取机器人姿态成功。\";\n                return true;\n            }\n            catch (Exception ex)\n            {\n                message = \"读取机器人姿态失败：\" + ex.Message;\n                return false;\n            }\n        }\n    }\n    \n}"},{"id":"conn","name":"AbbControllerConnection.cs","lines":175,"role":"扫描 / 连接 / 断开","layer":"设备层","src":"using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing System.Text;\nusing System.Threading.Tasks;\nusing ABB.Robotics.Controllers;\nusing ABB.Robotics.Controllers.Discovery;\n\nnamespace ABB_Digital_Twin\n{\n    internal class AbbControllerConnection\n    {\n        // 当前已经连接的 ABB 控制器对象\n        private Controller controller = null;\n\n        // 扫描到的控制器列表\n        private List<ControllerInfo> controllerList = new List<ControllerInfo>();\n\n        // 对外提供当前控制器对象，后面读取 TCP、关节角时可能会用到\n        public Controller CurrentController\n        {\n            get { return controller; } \n        }\n\n        // 对外提供扫描到的控制器数量\n        public int ControllerCount\n        {\n            get { return controllerList.Count; }\n        }\n\n        // 扫描 ABB 控制器\n        public bool ScanControllers(out string message)\n        {\n            try\n            {\n                controllerList.Clear();\n\n                //NetworkScanner搜索控制柜指令来自ABB pc sdk\n                NetworkScanner scanner = new NetworkScanner();\n\n                // 扫描当前网络中的 ABB 控制器\n                scanner.Scan();\n                //将扫描的数据类型赋值给自己定义的controllers\n                ControllerInfoCollection controllers = scanner.Controllers;\n\n                foreach (ControllerInfo info in controllers)\n                {\n                    controllerList.Add(info);\n                }\n\n                if (controllerList.Count == 0)\n                {\n                    message = \"没有扫描到 ABB 控制器。\";\n                    return false;\n                }\n\n                message = \"扫描成功，共扫描到 \" + controllerList.Count + \" 个控制器。\";\n                return true;\n            }\n            catch (Exception ex)\n            {\n                message = \"扫描失败：\" + ex.Message;\n                return false;\n            }\n        }\n\n        // 获取控制器显示信息\n        public List<string> GetControllerDisplayLines()\n        {\n            List<string> lines = new List<string>();\n\n            if (controllerList.Count == 0)\n            {\n                lines.Add(\"没有扫描到 ABB 控制器。\");\n                lines.Add(\"请确认电脑和控制柜在同一网络。\");\n                return lines;\n            }\n\n            int index = 1;\n\n            foreach (ControllerInfo info in controllerList)\n            {\n                lines.Add(\"========== 控制器 \" + index + \" ==========\");\n                lines.Add(\"IP: \" + info.IPAddress.ToString());\n                lines.Add(\"系统名: \" + info.SystemName);\n                lines.Add(\"RobotWare: \" + info.Version.ToString());\n                lines.Add(\"控制器名: \" + info.ControllerName);\n                lines.Add(\"是否虚拟控制器: \" + info.IsVirtual.ToString());\n                lines.Add(\"\");\n\n                index++;\n            }\n\n            return lines;\n        }\n\n        // 默认连接第一个控制器\n        public bool ConnectFirstController(out string message)\n        {\n            return ConnectControllerByIndex(0, out message);\n        }\n\n        // 根据序号连接控制器\n        public bool ConnectControllerByIndex(int index, out string message)\n        {\n            try\n            {\n                if (controllerList.Count == 0)\n                {\n                    message = \"没有可连接的控制器，请先扫描控制器。\";\n                    return false;\n                }\n\n                if (index < 0 || index >= controllerList.Count)\n                {\n                    message = \"控制器序号无效。\";\n                    return false;\n                }\n\n                ControllerInfo info = controllerList[index];\n\n                // 如果之前已经连接过，先断开旧连接\n                DisconnectController();\n\n                // 创建控制器对象\n                controller = ControllerFactory.CreateFrom(info);\n\n                // 登录控制器\n                controller.Logon(UserInfo.DefaultUser);\n\n                message =\n                    \"连接成功！\\n\" +\n                    \"控制器名：\" + info.ControllerName + \"\\n\" +\n                    \"系统名：\" + info.SystemName + \"\\n\" +\n                    \"IP：\" + info.IPAddress.ToString();\n\n                return true;\n            }\n            catch (Exception ex)\n            {\n                message = \"连接失败：\" + ex.Message;\n\n                if (controller != null)\n                {\n                    controller.Dispose();\n                    controller = null;\n                }\n\n                return false;\n            }\n        }\n\n        // 断开旧连接\n        public void DisconnectController()\n        {\n            if (controller != null)\n            {\n                try\n                {\n                    controller.Logoff();\n                    controller.Dispose();\n                }\n                catch\n                {\n                    // 断开过程中如果出错，这里先忽略，避免程序崩溃\n                }\n                finally\n                {\n                    controller = null;\n                }\n            }\n        }\n\n    }\n}"},{"id":"form","name":"Form1.cs","lines":200,"role":"UI 事件 + 500ms 定时器","layer":"界面层","src":"using System;\nusing System.Collections.Generic;\nusing System.ComponentModel;\nusing System.Data;\nusing System.Drawing;\nusing System.Linq;\nusing System.Text;\nusing System.Threading.Tasks;\nusing System.Windows.Forms;\n\n\nnamespace ABB_Digital_Twin\n{\n    public partial class Form1 : Form\n    {\n        AbbControllerConnection abbService = new AbbControllerConnection();\n        AbbRobotPoseReader poseReader = new AbbRobotPoseReader();\n        private System.Windows.Forms.Timer poseTimer = new System.Windows.Forms.Timer();\n        public Form1()\n        {\n            InitializeComponent();\n            // 设置定时器刷新周期\n            // 500 表示每 500 毫秒读取一次，也就是每秒读取 2 次\n            // 初期建议先用 500，稳定后可以改成 200\n            poseTimer.Interval = 500;\n\n            // 绑定定时器事件\n            // 每到一次时间，就会自动执行 PoseTimer_Tick 方法\n            poseTimer.Tick += PoseTimer_Tick;\n\n            // 关闭窗口时，停止定时器并断开 ABB 控制器连接\n            this.FormClosing += Form1_FormClosing;\n        }\n        /// <summary>\n        /// Timer 定时触发事件。\n        /// 只要 poseTimer.Start() 启动了定时器，\n        /// 这个方法就会每隔 poseTimer.Interval 毫秒自动执行一次。\n        /// <\/summary>\n        private void PoseTimer_Tick(object sender, EventArgs e)\n        {\n            // 定时读取机器人姿态\n            bool readOk = UpdateRobotPoseDisplay(false);\n\n            // 如果读取失败，说明可能控制器断开、未连接、RobotStudio关闭等\n            if (!readOk)\n            {\n                // 停止定时器，避免一直重复报错\n                poseTimer.Stop();\n\n                MessageBox.Show(\"实时读取已停止，请检查 ABB 控制器连接状态。\");\n            }\n        }\n\n        private void button1_Click(object sender, EventArgs e)\n        {\n            listBox1.Items.Clear();\n\n            string message;\n\n            bool scanOk = abbService.ScanControllers(out message);\n\n            List<string> lines = abbService.GetControllerDisplayLines();\n\n            foreach (string line in lines)\n            {\n                listBox1.Items.Add(line);\n            }\n\n            if (!scanOk)\n            {\n                MessageBox.Show(message);\n            }\n        }\n\n        private void button2_Click(object sender, EventArgs e)\n        {\n            string message;\n\n            if (abbService.ControllerCount == 0)\n            {\n                bool scanOk = abbService.ScanControllers(out message);\n\n                if (!scanOk)\n                {\n                    MessageBox.Show(message);\n                    return;\n                }\n            }\n\n            bool connectOk = abbService.ConnectFirstController(out message);\n\n            MessageBox.Show(message);\n        }\n\n        private void Form1_FormClosing(object sender, FormClosingEventArgs e)\n        {\n            // 关闭窗口前，先停止定时器\n            // 避免软件正在关闭时 Timer 还在读机器人数据\n            poseTimer.Stop();\n\n            // 断开 ABB 控制器连接，释放资源\n            abbService.DisconnectController();\n        }\n\n        private void button3_Click(object sender, EventArgs e)\n        {\n            UpdateRobotPoseDisplay(true);\n        }\n        /// <summary>\n        /// 读取机器人六轴姿态，并显示到 txtJ1 ~ txtJ6\n        /// <\/summary>\n        /// <param name=\"showErrorMessage\">\n        /// 是否显示错误弹窗。\n        /// 手动点击按钮时可以显示错误；\n        /// Timer 实时刷新时建议也可以显示一次错误并停止定时器。\n        /// <\/param>\n        /// <returns>\n        /// true 表示读取成功；false 表示读取失败。\n        /// <\/returns>\n        private bool UpdateRobotPoseDisplay(bool showErrorMessage)\n        {\n            // 用来保存读取到的机器人姿态数据\n            AbbRobotPoseData poseData;\n\n            // 用来保存读取结果提示信息\n            string message;\n\n            // 调用姿态读取类，从当前连接的 ABB 控制器中读取 J1~J6\n            bool readOk = poseReader.ReadRobotPose(\n                abbService.CurrentController,\n                out poseData,\n                out message\n            );\n\n            // 如果读取失败\n            if (!readOk)\n            {\n                // 如果允许弹窗，就显示错误原因\n                if (showErrorMessage)\n                {\n                    MessageBox.Show(message);\n                }\n\n                return false;\n            }\n\n            // 将读取到的六轴角度显示到 TextBox\n            // F2 表示保留两位小数\n            txtJ1.Text = poseData.J1.ToString(\"F2\");\n            txtJ2.Text = poseData.J2.ToString(\"F2\");\n            txtJ3.Text = poseData.J3.ToString(\"F2\");\n            txtJ4.Text = poseData.J4.ToString(\"F2\");\n            txtJ5.Text = poseData.J5.ToString(\"F2\");\n            txtJ6.Text = poseData.J6.ToString(\"F2\");\n\n            return true;\n        }\n\n        private void Form1_Load(object sender, EventArgs e)\n        {\n\n        }\n\n        private void btnStartRealTime_Click(object sender, EventArgs e)\n        {\n            // 启动实时读取前，先尝试读取一次\n            // 如果第一次都读取失败，就不要启动定时器\n            bool readOk = UpdateRobotPoseDisplay(true);\n\n            if (!readOk)\n            {\n                return;\n            }\n\n            // 启动定时器\n            // 启动后，PoseTimer_Tick 会按照设定间隔自动执行\n            poseTimer.Start();\n\n            MessageBox.Show(\"已开始实时读取六轴姿态。\");\n        }\n\n        private void btnStopRealTime_Click(object sender, EventArgs e)\n        {\n            // 停止定时器\n            poseTimer.Stop();\n\n            MessageBox.Show(\"已停止实时读取六轴姿态。\");\n        }\n\n        private void toolStripLabel1_Click(object sender, EventArgs e)\n        {\n\n        }\n\n        private void toolStripMenuItem2_Click(object sender, EventArgs e)\n        {\n\n        }\n    }\n}"},{"id":"designer","name":"Form1.Designer.cs","lines":409,"role":"设计器：控件与绝对坐标","layer":"界面层","src":"namespace ABB_Digital_Twin\n{\n    partial class Form1\n    {\n        /// <summary>\n        /// 必需的设计器变量。\n        /// <\/summary>\n        private System.ComponentModel.IContainer components = null;\n\n        /// <summary>\n        /// 清理所有正在使用的资源。\n        /// <\/summary>\n        /// <param name=\"disposing\">如果应释放托管资源，为 true；否则为 false。<\/param>\n        protected override void Dispose(bool disposing)\n        {\n            if (disposing && (components != null))\n            {\n                components.Dispose();\n            }\n            base.Dispose(disposing);\n        }\n\n        #region Windows 窗体设计器生成的代码\n\n        /// <summary>\n        /// 设计器支持所需的方法 - 不要修改\n        /// 使用代码编辑器修改此方法的内容。\n        /// <\/summary>\n        private void InitializeComponent()\n        {\n            this.components = new System.ComponentModel.Container();\n            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));\n            this.button1 = new System.Windows.Forms.Button();\n            this.listBox1 = new System.Windows.Forms.ListBox();\n            this.button2 = new System.Windows.Forms.Button();\n            this.button3 = new System.Windows.Forms.Button();\n            this.label1 = new System.Windows.Forms.Label();\n            this.txtJ1 = new System.Windows.Forms.TextBox();\n            this.txtJ2 = new System.Windows.Forms.TextBox();\n            this.label2 = new System.Windows.Forms.Label();\n            this.txtJ4 = new System.Windows.Forms.TextBox();\n            this.label3 = new System.Windows.Forms.Label();\n            this.txtJ3 = new System.Windows.Forms.TextBox();\n            this.label4 = new System.Windows.Forms.Label();\n            this.txtJ6 = new System.Windows.Forms.TextBox();\n            this.label5 = new System.Windows.Forms.Label();\n            this.txtJ5 = new System.Windows.Forms.TextBox();\n            this.label6 = new System.Windows.Forms.Label();\n            this.label7 = new System.Windows.Forms.Label();\n            this.label8 = new System.Windows.Forms.Label();\n            this.label9 = new System.Windows.Forms.Label();\n            this.label10 = new System.Windows.Forms.Label();\n            this.label11 = new System.Windows.Forms.Label();\n            this.label12 = new System.Windows.Forms.Label();\n            this.btnStartRealTime = new System.Windows.Forms.Button();\n            this.btnStopRealTime = new System.Windows.Forms.Button();\n            this.contextMenuStrip1 = new System.Windows.Forms.ContextMenuStrip(this.components);\n            this.contextMenuStrip2 = new System.Windows.Forms.ContextMenuStrip(this.components);\n            this.contextMenuStrip3 = new System.Windows.Forms.ContextMenuStrip(this.components);\n            this.menuStrip2 = new System.Windows.Forms.MenuStrip();\n            this.toolStripMenuItem2 = new System.Windows.Forms.ToolStripMenuItem();\n            this.toolStripMenuItem4 = new System.Windows.Forms.ToolStripMenuItem();\n            this.menuStrip2.SuspendLayout();\n            this.SuspendLayout();\n            // \n            // button1\n            // \n            this.button1.Font = new System.Drawing.Font(\"微软雅黑\", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));\n            this.button1.Location = new System.Drawing.Point(12, 219);\n            this.button1.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);\n            this.button1.Name = \"button1\";\n            this.button1.Size = new System.Drawing.Size(165, 52);\n            this.button1.TabIndex = 0;\n            this.button1.Text = \"扫描控制器\";\n            this.button1.UseVisualStyleBackColor = true;\n            this.button1.Click += new System.EventHandler(this.button1_Click);\n            // \n            // listBox1\n            // \n            this.listBox1.Font = new System.Drawing.Font(\"微软雅黑\", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));\n            this.listBox1.FormattingEnabled = true;\n            this.listBox1.ItemHeight = 20;\n            this.listBox1.Location = new System.Drawing.Point(12, 84);\n            this.listBox1.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);\n            this.listBox1.Name = \"listBox1\";\n            this.listBox1.Size = new System.Drawing.Size(382, 124);\n            this.listBox1.TabIndex = 1;\n            // \n            // button2\n            // \n            this.button2.Font = new System.Drawing.Font(\"微软雅黑\", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));\n            this.button2.Location = new System.Drawing.Point(229, 216);\n            this.button2.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);\n            this.button2.Name = \"button2\";\n            this.button2.Size = new System.Drawing.Size(165, 52);\n            this.button2.TabIndex = 2;\n            this.button2.Text = \"连接控制器\";\n            this.button2.UseVisualStyleBackColor = true;\n            this.button2.Click += new System.EventHandler(this.button2_Click);\n            // \n            // button3\n            // \n            this.button3.Font = new System.Drawing.Font(\"微软雅黑\", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));\n            this.button3.Location = new System.Drawing.Point(623, 37);\n            this.button3.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);\n            this.button3.Name = \"button3\";\n            this.button3.Size = new System.Drawing.Size(164, 52);\n            this.button3.TabIndex = 3;\n            this.button3.Text = \"读取六轴姿态\";\n            this.button3.UseVisualStyleBackColor = true;\n            this.button3.Click += new System.EventHandler(this.button3_Click);\n            // \n            // label1\n            // \n            this.label1.AutoSize = true;\n            this.label1.Location = new System.Drawing.Point(642, 164);\n            this.label1.Name = \"label1\";\n            this.label1.Size = new System.Drawing.Size(32, 20);\n            this.label1.TabIndex = 4;\n            this.label1.Text = \"J1 :\";\n            // \n            // txtJ1\n            // \n            this.txtJ1.Location = new System.Drawing.Point(690, 160);\n            this.txtJ1.Name = \"txtJ1\";\n            this.txtJ1.Size = new System.Drawing.Size(67, 27);\n            this.txtJ1.TabIndex = 5;\n            // \n            // txtJ2\n            // \n            this.txtJ2.Location = new System.Drawing.Point(690, 193);\n            this.txtJ2.Name = \"txtJ2\";\n            this.txtJ2.Size = new System.Drawing.Size(67, 27);\n            this.txtJ2.TabIndex = 7;\n            // \n            // label2\n            // \n            this.label2.AutoSize = true;\n            this.label2.Location = new System.Drawing.Point(641, 196);\n            this.label2.Name = \"label2\";\n            this.label2.Size = new System.Drawing.Size(32, 20);\n            this.label2.TabIndex = 6;\n            this.label2.Text = \"J2 :\";\n            // \n            // txtJ4\n            // \n            this.txtJ4.Location = new System.Drawing.Point(690, 261);\n            this.txtJ4.Name = \"txtJ4\";\n            this.txtJ4.Size = new System.Drawing.Size(67, 27);\n            this.txtJ4.TabIndex = 11;\n            // \n            // label3\n            // \n            this.label3.AutoSize = true;\n            this.label3.Location = new System.Drawing.Point(641, 264);\n            this.label3.Name = \"label3\";\n            this.label3.Size = new System.Drawing.Size(32, 20);\n            this.label3.TabIndex = 10;\n            this.label3.Text = \"J4 :\";\n            // \n            // txtJ3\n            // \n            this.txtJ3.Location = new System.Drawing.Point(690, 228);\n            this.txtJ3.Name = \"txtJ3\";\n            this.txtJ3.Size = new System.Drawing.Size(67, 27);\n            this.txtJ3.TabIndex = 9;\n            // \n            // label4\n            // \n            this.label4.AutoSize = true;\n            this.label4.Location = new System.Drawing.Point(642, 232);\n            this.label4.Name = \"label4\";\n            this.label4.Size = new System.Drawing.Size(32, 20);\n            this.label4.TabIndex = 8;\n            this.label4.Text = \"J3 :\";\n            // \n            // txtJ6\n            // \n            this.txtJ6.Location = new System.Drawing.Point(690, 327);\n            this.txtJ6.Name = \"txtJ6\";\n            this.txtJ6.Size = new System.Drawing.Size(67, 27);\n            this.txtJ6.TabIndex = 15;\n            // \n            // label5\n            // \n            this.label5.AutoSize = true;\n            this.label5.Location = new System.Drawing.Point(641, 330);\n            this.label5.Name = \"label5\";\n            this.label5.Size = new System.Drawing.Size(32, 20);\n            this.label5.TabIndex = 14;\n            this.label5.Text = \"J6 :\";\n            // \n            // txtJ5\n            // \n            this.txtJ5.Location = new System.Drawing.Point(690, 294);\n            this.txtJ5.Name = \"txtJ5\";\n            this.txtJ5.Size = new System.Drawing.Size(67, 27);\n            this.txtJ5.TabIndex = 13;\n            // \n            // label6\n            // \n            this.label6.AutoSize = true;\n            this.label6.Location = new System.Drawing.Point(642, 298);\n            this.label6.Name = \"label6\";\n            this.label6.Size = new System.Drawing.Size(32, 20);\n            this.label6.TabIndex = 12;\n            this.label6.Text = \"J5 :\";\n            // \n            // label7\n            // \n            this.label7.AutoSize = true;\n            this.label7.Location = new System.Drawing.Point(763, 164);\n            this.label7.Name = \"label7\";\n            this.label7.Size = new System.Drawing.Size(24, 20);\n            this.label7.TabIndex = 16;\n            this.label7.Text = \"度\";\n            // \n            // label8\n            // \n            this.label8.AutoSize = true;\n            this.label8.Location = new System.Drawing.Point(763, 196);\n            this.label8.Name = \"label8\";\n            this.label8.Size = new System.Drawing.Size(24, 20);\n            this.label8.TabIndex = 17;\n            this.label8.Text = \"度\";\n            // \n            // label9\n            // \n            this.label9.AutoSize = true;\n            this.label9.Location = new System.Drawing.Point(763, 231);\n            this.label9.Name = \"label9\";\n            this.label9.Size = new System.Drawing.Size(24, 20);\n            this.label9.TabIndex = 18;\n            this.label9.Text = \"度\";\n            // \n            // label10\n            // \n            this.label10.AutoSize = true;\n            this.label10.Location = new System.Drawing.Point(763, 264);\n            this.label10.Name = \"label10\";\n            this.label10.Size = new System.Drawing.Size(24, 20);\n            this.label10.TabIndex = 19;\n            this.label10.Text = \"度\";\n            // \n            // label11\n            // \n            this.label11.AutoSize = true;\n            this.label11.Location = new System.Drawing.Point(763, 298);\n            this.label11.Name = \"label11\";\n            this.label11.Size = new System.Drawing.Size(24, 20);\n            this.label11.TabIndex = 20;\n            this.label11.Text = \"度\";\n            // \n            // label12\n            // \n            this.label12.AutoSize = true;\n            this.label12.Location = new System.Drawing.Point(763, 330);\n            this.label12.Name = \"label12\";\n            this.label12.Size = new System.Drawing.Size(24, 20);\n            this.label12.TabIndex = 21;\n            this.label12.Text = \"度\";\n            // \n            // btnStartRealTime\n            // \n            this.btnStartRealTime.Font = new System.Drawing.Font(\"微软雅黑\", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));\n            this.btnStartRealTime.Location = new System.Drawing.Point(559, 101);\n            this.btnStartRealTime.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);\n            this.btnStartRealTime.Name = \"btnStartRealTime\";\n            this.btnStartRealTime.Size = new System.Drawing.Size(164, 52);\n            this.btnStartRealTime.TabIndex = 22;\n            this.btnStartRealTime.Text = \"开始实时读取\";\n            this.btnStartRealTime.UseVisualStyleBackColor = true;\n            this.btnStartRealTime.Click += new System.EventHandler(this.btnStartRealTime_Click);\n            // \n            // btnStopRealTime\n            // \n            this.btnStopRealTime.Font = new System.Drawing.Font(\"微软雅黑\", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));\n            this.btnStopRealTime.Location = new System.Drawing.Point(729, 101);\n            this.btnStopRealTime.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);\n            this.btnStopRealTime.Name = \"btnStopRealTime\";\n            this.btnStopRealTime.Size = new System.Drawing.Size(164, 52);\n            this.btnStopRealTime.TabIndex = 23;\n            this.btnStopRealTime.Text = \"停止实时读取\";\n            this.btnStopRealTime.UseVisualStyleBackColor = true;\n            this.btnStopRealTime.Click += new System.EventHandler(this.btnStopRealTime_Click);\n            // \n            // contextMenuStrip1\n            // \n            this.contextMenuStrip1.ImageScalingSize = new System.Drawing.Size(20, 20);\n            this.contextMenuStrip1.Name = \"contextMenuStrip1\";\n            this.contextMenuStrip1.Size = new System.Drawing.Size(61, 4);\n            // \n            // contextMenuStrip2\n            // \n            this.contextMenuStrip2.ImageScalingSize = new System.Drawing.Size(20, 20);\n            this.contextMenuStrip2.Name = \"contextMenuStrip2\";\n            this.contextMenuStrip2.Size = new System.Drawing.Size(61, 4);\n            // \n            // contextMenuStrip3\n            // \n            this.contextMenuStrip3.ImageScalingSize = new System.Drawing.Size(20, 20);\n            this.contextMenuStrip3.Name = \"contextMenuStrip3\";\n            this.contextMenuStrip3.Size = new System.Drawing.Size(61, 4);\n            // \n            // menuStrip2\n            // \n            this.menuStrip2.ImageScalingSize = new System.Drawing.Size(20, 20);\n            this.menuStrip2.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {\n            this.toolStripMenuItem2});\n            this.menuStrip2.Location = new System.Drawing.Point(0, 0);\n            this.menuStrip2.Name = \"menuStrip2\";\n            this.menuStrip2.Size = new System.Drawing.Size(966, 28);\n            this.menuStrip2.TabIndex = 30;\n            this.menuStrip2.Text = \"menuStrip2\";\n            // \n            // toolStripMenuItem2\n            // \n            this.toolStripMenuItem2.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {\n            this.toolStripMenuItem4});\n            this.toolStripMenuItem2.Name = \"toolStripMenuItem2\";\n            this.toolStripMenuItem2.Size = new System.Drawing.Size(68, 24);\n            this.toolStripMenuItem2.Text = \"12231\";\n            this.toolStripMenuItem2.Click += new System.EventHandler(this.toolStripMenuItem2_Click);\n            // \n            // toolStripMenuItem4\n            // \n            this.toolStripMenuItem4.Name = \"toolStripMenuItem4\";\n            this.toolStripMenuItem4.Size = new System.Drawing.Size(224, 26);\n            this.toolStripMenuItem4.Text = \"12121\";\n            // \n            // Form1\n            // \n            this.AutoScaleDimensions = new System.Drawing.SizeF(9F, 20F);\n            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;\n            this.ClientSize = new System.Drawing.Size(966, 569);\n            this.Controls.Add(this.btnStopRealTime);\n            this.Controls.Add(this.btnStartRealTime);\n            this.Controls.Add(this.label12);\n            this.Controls.Add(this.label11);\n            this.Controls.Add(this.label10);\n            this.Controls.Add(this.label9);\n            this.Controls.Add(this.label8);\n            this.Controls.Add(this.label7);\n            this.Controls.Add(this.txtJ6);\n            this.Controls.Add(this.label5);\n            this.Controls.Add(this.txtJ5);\n            this.Controls.Add(this.label6);\n            this.Controls.Add(this.txtJ4);\n            this.Controls.Add(this.label3);\n            this.Controls.Add(this.txtJ3);\n            this.Controls.Add(this.label4);\n            this.Controls.Add(this.txtJ2);\n            this.Controls.Add(this.label2);\n            this.Controls.Add(this.txtJ1);\n            this.Controls.Add(this.label1);\n            this.Controls.Add(this.button3);\n            this.Controls.Add(this.button2);\n            this.Controls.Add(this.listBox1);\n            this.Controls.Add(this.button1);\n            this.Controls.Add(this.menuStrip2);\n            this.Font = new System.Drawing.Font(\"微软雅黑\", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));\n            this.Icon = ((System.Drawing.Icon)(resources.GetObject(\"$this.Icon\")));\n            this.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);\n            this.Name = \"Form1\";\n            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;\n            this.Text = \"喷涂机械臂数字孪生系统\";\n            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Form1_FormClosing);\n            this.Load += new System.EventHandler(this.Form1_Load);\n            this.menuStrip2.ResumeLayout(false);\n            this.menuStrip2.PerformLayout();\n            this.ResumeLayout(false);\n            this.PerformLayout();\n\n        }\n\n        #endregion\n\n        private System.Windows.Forms.Button button1;\n        private System.Windows.Forms.ListBox listBox1;\n        private System.Windows.Forms.Button button2;\n        private System.Windows.Forms.Button button3;\n        private System.Windows.Forms.Label label1;\n        private System.Windows.Forms.TextBox txtJ1;\n        private System.Windows.Forms.TextBox txtJ2;\n        private System.Windows.Forms.Label label2;\n        private System.Windows.Forms.TextBox txtJ4;\n        private System.Windows.Forms.Label label3;\n        private System.Windows.Forms.TextBox txtJ3;\n        private System.Windows.Forms.Label label4;\n        private System.Windows.Forms.TextBox txtJ6;\n        private System.Windows.Forms.Label label5;\n        private System.Windows.Forms.TextBox txtJ5;\n        private System.Windows.Forms.Label label6;\n        private System.Windows.Forms.Label label7;\n        private System.Windows.Forms.Label label8;\n        private System.Windows.Forms.Label label9;\n        private System.Windows.Forms.Label label10;\n        private System.Windows.Forms.Label label11;\n        private System.Windows.Forms.Label label12;\n        private System.Windows.Forms.Button btnStartRealTime;\n        private System.Windows.Forms.Button btnStopRealTime;\n        private System.Windows.Forms.ContextMenuStrip contextMenuStrip1;\n        private System.Windows.Forms.ContextMenuStrip contextMenuStrip2;\n        private System.Windows.Forms.ContextMenuStrip contextMenuStrip3;\n        private System.Windows.Forms.MenuStrip menuStrip2;\n        private System.Windows.Forms.ToolStripMenuItem toolStripMenuItem2;\n        private System.Windows.Forms.ToolStripMenuItem toolStripMenuItem4;\n    }\n}"}],"blocks":{"program":[{"a":1,"b":5,"title":"文件头的 5 条 using 指令（其中 3 条是模板冗余）","brief":"引入命名空间，实际只用得上 System 和 System.Windows.Forms 两行","detail":"这五行把别的命名空间里的类型名搬进当前文件。真正用得上的只有两行——System（第 14 行 [STAThread] 特性的来源）和 System.Windows.Forms（Application、Form1 全靠它）。Collections.Generic、Linq、Threading.Tasks 是模板自动塞进来的，本文件没有泛型集合、没有 LINQ 查询、也没有 Task。↔ 对照 AbbRobotPoseReader.cs 的 8 行 using：那边每行都真在用。删掉这 3 行照样编译通过。","gotcha":"多余 using 不会产生任何编译警告，属于典型模板噪声。要确认某行是否必需，临时删掉重新生成，只有报「找不到类型或命名空间」才说明它不可删。"},{"a":6,"b":8,"title":"空行与命名空间声明","brief":"一个空行加命名空间开头，划定本文件的归属范围","detail":"第 6 行是分隔 using 区与类型声明区的空行，编译器完全忽略它，纯粹给人读。第 7 行声明命名空间 ABB_Digital_Twin，第 8 行是它的左括号。本工程 7 个文件全部落在同一个命名空间里，所以 Program、Form1、AbbRobotPoseData 互相引用不用加前缀，也不用在文件头 using 本项目。↔ 正因为共用一个命名空间，Form1.cs 里能直接写 new AbbRobotPoseData()。命名空间名带下划线虽然合法，但不符合 .NET 命名规范，属风格问题，不影响编译。"},{"a":9,"b":10,"title":"入口类的 internal + static 声明","brief":"只放 Main 的容器类，用最小暴露的修饰符","detail":"第 9 行是本块主体：internal 表示这个类只在本程序集（编出来的 exe）里可见，外部程序集看不到也无法引用；static 表示它是静态类，不能被 new、不能被继承，里面所有成员也必须是静态的。「只放一个 Main 的容器类」用这两个修饰符是最小暴露写法：没有理由让外部代码看到入口类，更没有理由创建它的实例。↔ 它在数据流最上游：第 19 行 Application.Run 把控制权交给 Form1 之后，Program 就不再参与，之后全由 Form1 的按钮和定时器驱动。","gotcha":"把 Main 挪进非 static 类、或误删这个类，编译会报 CS5001「程序不包含适用于入口点的静态 Main 方法」——根因就在这里：入口必须是静态方法。"},{"a":11,"b":15,"title":"XML 注释、[STAThread] 特性与 Main 签名","brief":"三行文档注释、单线程单元特性、以及标准入口方法签名","detail":"前三行 /// 是 XML 文档注释，编译时可选导出成 XML，供 IntelliSense 显示「应用程序的主入口点」，不参与运行。第 14 行 [STAThread] 是本块重点：它是特性，CLR 在进入 Main 之前读它，把当前线程的 COM 单元初始化成单线程单元（STA，一次只有一个线程碰该单元里的 COM 对象）。第 15 行是 C# 允许的最简入口形式，也可写 Main(string[] args) 或返回 int 当退出码。↔ Form1 的事件处理器都跑在这条 STA 线程上。","api":"[STAThread] + static void Main()（CLR 在 Application.Run 之前据此设置线程单元状态）","gotcha":"去掉 [STAThread] 程序一般仍能启动，但一旦用到 Clipboard.SetText、拖放、OpenFileDialog 或 ActiveX/COM 控件，就可能抛「当前线程不在单线程单元中」一类异常。报错点离病因很远，很难查，所以这行千万别删。"},{"a":16,"b":20,"title":"三行启动代码：视觉样式、文本渲染、消息循环","brief":"Main 的全部逻辑，顺序不可调换","detail":"Main 就三句，顺序不能换。EnableVisualStyles 打开系统视觉样式，控件按当前 Windows 主题绘制。SetCompatibleTextRenderingDefault(false) 把控件文本渲染定成 GDI（推荐值），true 则用 GDI+、与 .NET 1.x 兼容。Run 创建主窗体并启动消息循环，阻塞到主窗体关闭才返回。↔ 它进入 Form1 构造函数 → InitializeComponent → Form1_Load，之后按钮与定时器才去调 Reader。","api":"Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false); Application.Run(new Form1())","gotcha":"前两句必须在创建任何窗口之前调用，且 SetCompatibleTextRenderingDefault 每个进程只能调一次；放在窗体显示之后再调会抛 InvalidOperationException。"},{"a":21,"b":22,"title":"收尾的两行右括号","brief":"分别闭合类体和命名空间，文件到此结束","detail":"第 21 行闭合 Program 类的类体，第 22 行闭合 ABB_Digital_Twin 命名空间，分别与第 10、8 行的左括号配对。文件里没有任何业务逻辑——真正干活的是 Form1 及它持有的 Connection、Reader、DTO。↔ 值得记一笔的是 Run 的返回时机：主窗体关闭之后它才返回。将来若要写「退出前释放 Controller」这类清理代码，位置就在第 19 与 20 行之间；目前没有，所以关窗即进程退出。"}],"class1":[{"a":1,"b":5,"title":"模板自带的 5 条 using（本文件一条都用不上）","brief":"空类不需要这些命名空间，纯属 VS 新建类的默认产物","detail":"这五行全是 VS「添加 → 类」时模板自动生成的。本文件是一个完全空的类，一行代码都没用到它们，所以五行都是冗余。↔ 与本项目的 AbbRobotPoseData.cs 对比很直观：那边模板也给了同样 5 行，但 DTO 至少用到了 string 类型，需要 System；Class1 连 System 都不需要。判断某行 using 是否必要：临时删掉重新生成，报「未能找到类型或命名空间名」才说明它是必需的。保留它们不影响编译和运行，只是读代码时的噪音。","gotcha":"IDE 的「移除未使用的 using」清理会把这 5 行全删掉，行为不变——这是确认它确实没用的最快办法。"},{"a":6,"b":8,"title":"空行与命名空间声明","brief":"与其它 6 个文件共用同一个命名空间","detail":"一个空行加命名空间开头。空行只是分隔 using 区和类型声明区，编译器完全忽略。命名空间还是 ABB_Digital_Twin，与 Program.cs、Form1.cs、AbbControllerConnection.cs、AbbRobotPoseReader.cs、AbbRobotPoseData.cs 一致——本工程 7 个文件同属一个命名空间。↔ 正因如此，别的文件想引用 Class1 时不需要再加 using，这也是它「悄悄存在、没人注意」的原因之一。第 8 行左括号与第 12 行右括号配对。"},{"a":9,"b":10,"title":"空类 Class1 的声明","brief":"internal 的空类，没有任何成员，从未被 new 过","detail":"空类声明本身。第 9 行把类名定为 Class1、可见性定为 internal（程序集内可见），第 10 行是类体左括号。这个类里没有任何成员：没有字段、没有属性、没有方法、没有构造函数、没有事件。它是「新建类」的原始模板，创建后从未被修改过。↔ 关键事实：整个工程里没有一处 new Class1()，也没有任何地方把它当类型使用，所以它是死代码；但它并非不存在——它会被编译进 exe 的程序集（多一个类型条目），只是永远不会被实例化。删掉这个文件对程序行为零影响。","gotcha":"留着一个从不使用的空类不会报错也不会警告，容易被误以为是某个功能的占位；接手别人的工程时，先用「查找所有引用」确认它真没人用，再决定删不删。"},{"a":11,"b":12,"title":"两行收尾右括号","brief":"闭合类体与命名空间，文件结束","detail":"两行右括号收尾：第 11 行闭合 Class1 的类体，第 12 行闭合 ABB_Digital_Twin 命名空间。它们分别与第 10 行、第 8 行的左括号配对。↔ 这个文件到此结束，它对数据流（按钮/定时器 → Connection → Reader → DTO → Form1 显示）没有任何贡献：既不在 Program.Main 的调用链上，也不在 Form1 的引用链上。保留它的唯一作用，是让项目文件列表看起来更像 VS 默认模板；如果目标是理解整个工程，这个文件可以直接跳过。"}],"pose":[{"a":1,"b":5,"title":"模板自带的 5 条 using（只依赖基础类库）","brief":"纯数据类有意不引入任何 PCSDK 命名空间","detail":"这五行同样是 VS「添加 → 类」模板自动生成的。对这个纯数据类来说，真正有点关系的只有 System，其余四行完全用不到：没有集合、没有 LINQ 查询、没有 StringBuilder、没有异步代码。↔ 对照 AbbRobotPoseReader.cs：它用了 Controller、MechanicalUnit、JointTarget，必须再补三行 ABB 命名空间的 using；而 DTO 有意只依赖 BCL，不引入任何 PCSDK 类型——这正是它能当中立数据契约的原因。","gotcha":"若将来给 DTO 加上 List<double> 之类的成员，Collections.Generic 就变成必需的了；这些残留 using 有时是提前预支进来的。"},{"a":6,"b":8,"title":"空行与命名空间声明","brief":"DTO 放在命名空间顶层，三层都能引用它","detail":"空行加命名空间声明。命名空间是 ABB_Digital_Twin，与 Program.cs、Form1.cs、Reader 完全一致，所以 Form1 里用 out 参数拿到 AbbRobotPoseData 时不需要任何额外 using。↔ 第 8 行左括号与第 29 行右括号配对，中间只有这一个类。注意：DTO 故意放在普通命名空间顶层而不是嵌套在 Form1 里，这样设备层 Connection、数据层 Reader、UI 层 Form1 三方都能引用它，而它不反过来依赖任何一层——这是分层能成立的前提。"},{"a":9,"b":10,"title":"类声明：public 的纯数据容器","brief":"public 是为了当对外数据契约，类体里只有属性","detail":"类的声明。public 表示任何程序集都能看到并使用这个类型；虽然本项目只有 Form1 和 Reader 在用，且它们与 DTO 同程序集（internal 也够），但 DTO 的定位是对外暴露的数据契约，写 public 更符合惯例，也方便将来把数据层拆成独立类库。名字后缀 Data 是 DTO 的常见命名。↔ 它是三层里最底层：Reader 负责 new 并填值，Form1 负责读取，它自己完全不知道上下游是谁。这就是 POCO 的价值：不写逻辑，所以谁都能用、改动影响面最小。","gotcha":"把计算逻辑（比如毫米转米、四元数转欧拉角）写进 DTO，会立刻让它依赖具体数据来源和显示需求，三层就粘在一起了；转换要放在读取侧或显示侧。"},{"a":11,"b":16,"title":"六个关节角属性 J1~J6（唯一被显示的六个字段）","brief":"自动属性，装 Reader 从 RobJoint 抄来的六轴角度","detail":"六个关节角属性，都是 public double 配「get; set;」自动属性。自动属性是语法糖：编译后字段和 get/set 方法都在，只是源码里省了。↔ 上游是 Reader 第 47~52 行把 Rax_1..Rax_6 赋过来；下游是 Form1 第 149~154 行用两位小数显示到 txtJ1~txtJ6。所以 14 个属性里只有这 6 个真正被读取。注意 float 转 double 只是换了更宽的容器：Rax_* 本身是 float（约 7 位有效数字），装进 double 不会变准。","api":"RobJoint.Rax_1 ... Rax_6（float）；JointTarget.RobAx（public 字段，非属性）","gotcha":"若当前活动机械单元是外轴或变位机，MechanicalUnit.GetPosition() 会把角度塞进 ExtAx，RobAx 全 0，于是这六个值静默显示 0.0000，而读取方法的返回值仍然是 true。"},{"a":17,"b":20,"title":"TCP 平移三分量 TcpX/TcpY/TcpZ（读到了但没人看）","brief":"世界坐标系下的 TCP 位置，单位 mm，下游零读取","detail":"TCP 平移三个分量。第 17 行空行只是分组。单位是毫米：PCSDK 内部 GetCurrentTarget 做的是 cartesianValues[0] 乘以 1000，控制器内部用米，暴露到 .NET 端已换成 mm。↔ 上游 Reader 第 54~56 行从 robTarget.Trans.X/Y/Z 赋值，取的是 World 世界坐标系下的位姿。下游：没有——Form1 从头到尾没读过这三个属性，设计器里也没做 TCP 显示框。于是它们「读到了、存下来了、没人看」，而这恰是数字孪生最需要的部分。","api":"MechanicalUnit.GetPosition(CoordinateSystemType) → RobTarget.Trans（float X/Y/Z，单位 mm）","gotcha":"界面只显示关节角，容易让人误以为 PCSDK 只拿得到关节角；实际上 TCP 位姿每 500ms 都已读进内存，加三个 TextBox 绑定即可显示，不需要新增任何 PCSDK 调用。"},{"a":21,"b":25,"title":"四元数姿态四分量 Q1~Q4（读到了但没人看）","brief":"从 Orient 抄来的四个分量，同样只有赋值没有读取","detail":"四元数姿态四分量，同样只赋值不读取。上游是 Reader 第 58~61 行从 robTarget.Rot.Q1..Q4 抄过来。↔ 与 TCP 一样，Form1 没有任何地方读它们，界面上的姿态信息完全缺失。真要显示会遇到顺序陷阱：Orient 里 Q1 是标量部分 w，Q2/Q3/Q4 才是向量部分 x/y/z；而 .NET 的 Quaternion 构造顺序是 x,y,z,w，直接按 Q1~Q4 构造会得到转错的姿态。Orient 自带 ToEulerAngles，显示欧拉角不必自己推公式（单位未验证）。","api":"Orient.Q1..Q4（double）；Orient.ToEulerAngles(out double, out double, out double)","gotcha":"别把 Q1~Q4 当成 x/y/z/w 直接用；顺序搞反的典型症状是「姿态看着像，但差一个旋转变换」，很难一眼看出来。"},{"a":26,"b":29,"title":"机械单元名属性与两行收尾括号","brief":"string 属性可为 null，闭合类体与命名空间","detail":"机械单元名属性加两行收尾的右括号。MechanicalUnitName 是 string、引用类型，用来记录这份数据取自哪个机械单元，调试时最有用。↔ 上游 Reader 第 45 行写 poseData.MechanicalUnitName = mechUnit.Name；下游同样是零读取——Form1 没显示它，所以出错时你无法从界面判断是哪个单元的数据。结合事实卡那条：若活动单元是外轴导致关节角全 0，这里恰好就是最该看的信息，却被丢掉了。","gotcha":"string 是引用类型，未赋值时默认是 null（double 才会自动是 0.0）；本类每次读取都 new 一个新对象再由 Reader 立即赋值，实际不会是 null，但类型上允许，读之前判空更稳。"}],"reader":[{"a":1,"b":9,"title":"文件头与命名空间导入","brief":"九个 using，决定后面能写哪些短名字","detail":"这九行决定本文件后面能直接写哪些短名字：前五行是 .NET 基础命名空间（Exception、集合、LINQ、字符串、异步任务），后三行是 PCSDK 的三个域——Controllers 核心域、MotionDomain 运动域、RapidDomain 数据结构域。真正用到的只有 System 和后两个 ABB 域，中间几行是新建类的模板残留，删掉也不影响行为。↔ 后面 Controller、JointTarget 能不能省全名，全由这几行决定。","gotcha":"中间几个 using 一次都没用到，别误以为它们在起作用；删掉也不会报错。"},{"a":10,"b":13,"title":"命名空间与类声明","brief":"把读姿态这件事封成一个可复用的小类","detail":"ABB_Digital_Twin 是整程序的命名空间，七个源文件都住这里，所以 Form1 不用写全名就能 new 出这个类。AbbRobotPoseReader 是无状态工具类：没有字段、没有构造函数、不持有 Controller，唯一成员就是下面的 ReadRobotPose，因此在 Form1 里 new 几次都不会残留上一次的状态。↔ 上游是 Form1 的 poseReader 成员，下游是本类唯一方法；本类产出的对象类型是 DTO AbbRobotPoseData。","gotcha":"类里不存 Controller，所以每次调用都必须由调用方把控制器递进来。"},{"a":14,"b":18,"title":"方法签名与两个 out 参数初始化","brief":"输入一个控制器，输出姿态数据 + 一句提示语","detail":"签名三样东西：输入 controller、输出 poseData、输出 message，返回值 bool 只表达成败。这是典型的「状态码 + 消息」C 风格约定：失败原因不抛异常，而是写进 message 让 UI 弹窗，让“没连接”这类常态失败不炸界面。out 要求被调方在每条返回路径上先赋值，调用方反而可以传未初始化变量——Form1 里那句 AbbRobotPoseData poseData; 正因此才编得过。↔ 下游是 Form1.UpdateRobotPoseDisplay。","api":"bool ReadRobotPose(Controller controller, out AbbRobotPoseData poseData, out string message)","gotcha":"out 参数不允许只在成功路径赋值：任何一条 return 之前漏赋值都编译不过。"},{"a":19,"b":26,"title":"try 包裹与控制器空引用检查","brief":"先判定控制器在不在，再进保护区","detail":"try 从第 19 行一直开到第 65 行，把后面全部 PCSDK 调用圈进异常保护区。里面第一件事是防 controller 为 null——用户没点连接就点读取，这时没必要进网络层，直接给一句人话并返回 false。注意这个检查只防 null，防不了\"对象还在但控制器已断开\"，那种情况只有真正发 RPC 时才炸，由第 66 行的 catch 兜住。↔ 上游是 Form1 直接把可能为 null 的 abbService.CurrentController 递进来。","gotcha":"null 检查挡不住\"已断开\"：对象非空但链路已死，只有真调用时才抛异常。"},{"a":27,"b":29,"title":"取当前活动机械单元","brief":"向运动系统要「当前激活」的那一台单元","detail":"向运动系统要当前激活的机械单元。ActiveMechanicalUnit 最省事也最片面：单机器人站够用，带外轴、变位机或双机的系统里它只返回控制器认定的那一台，其余完全看不到，要遍历得用 MotionSystem.MechanicalUnits，本程序没写。反编译显示它每次访问都要比对 InternalController.Motion.ActiveMech，可能带一次控制器往返，不适合塞进 500ms 定时循环。↔ 下游第 37、41 行两次 GetPosition 都挂在它上面。","api":"MechanicalUnit MotionSystem.ActiveMechanicalUnit","gotcha":"只返回当前激活的一台，多机或带外轴系统会漏掉其它机械单元。"},{"a":30,"b":35,"title":"机械单元空值检查","brief":"没有激活单元时给出专用提示，而不是让它炸","detail":"控制器在线但系统里没有激活机械单元时，上一行会返回 null；不拦一下，第 37 行就 NullReferenceException，再被 catch 压成一句含糊的\"读取失败\"，用户分不清是没激活还是网络断。这里显式判 null 并返回专用提示语，是全方法唯一把\"没激活单元\"和\"RPC 失败\"区分开的检查，诊断价值就靠它。↔ 上游是第 28 行属性的返回值，下游回 Form1：定时器路径 showErrorMessage 传的是 false，这类提示不会弹窗，界面只会静默停在旧数字上。","gotcha":"定时器路径不弹窗，这条提示等于只写不用，用户只看到数字不动。"},{"a":36,"b":39,"title":"读取六轴关节角","brief":"拿 JointTarget，只取机器人本体那半边 RobAx","detail":"无参重载拿到 JointTarget，再只取其中的 RobAx（本体六轴）。GetPosition() 内部按单元类型分流：TcpRobot 型把关节值放进 RobAx、ExtAx 给 Empty；外轴或变位机型反之，值全塞进 ExtAx，RobAx 变成 RobJoint.Empty（六个 0），且不抛异常。代码从不看 ExtAx，于是带变位机的站上 J1~J6 静默显示 0.0000 而 readOk 仍为 true。Rax_1..Rax_6 是 float，单位度。↔ 下游是第 47~52 行摊平进 DTO。","api":"JointTarget MechanicalUnit.GetPosition()","gotcha":"外轴/变位机型下 RobAx 是 RobJoint.Empty（全 0），代码不判 ExtAx，J1~J6 静默显示 0 而 readOk 仍是 true。"},{"a":40,"b":42,"title":"读取 TCP 位姿（世界坐标系）","brief":"换一个重载，问世界系下的笛卡尔位姿","detail":"第二次 GetPosition 换成带参重载，指定 World 世界坐标系，拿回 RobTarget。它由 Trans（Pos 型 X/Y/Z，毫米）、Rot（Orient 四元数）、Robconf（轴配置）、Extax（外轴）组成，本程序只用前两个。CoordinateSystemType 还有 Base、Tool、WorkObject 等选项。该重载只支持 TcpRobot 型单元，其它类型抛异常；它又在第 37 行之后同一 try 里，一抛就把已读关节角一起废掉。↔ 下游是第 54~61 行写 DTO。","api":"RobTarget MechanicalUnit.GetPosition(CoordinateSystemType coordinateSystem)","gotcha":"只支持 TCP Robot 型单元；它排在关节角读取之后、同一 try 内，抛异常会把已成功的关节角结果一并废掉。"},{"a":43,"b":46,"title":"创建 DTO 并写入单元名","brief":"两次读取都成了，才分配 DTO 开始摊平","detail":"两次读取都越过之后，才 new 一个 AbbRobotPoseData，把 PCSDK 的嵌套结构摊平成纯数据类。摊平的意义是解耦：Form1 从此不必认识 JointTarget、RobTarget、Orient，只面对 14 个 double 加 1 个 string；将来换 SDK 版本或加缓存层只改本文件。不过第 45 行写的 MechanicalUnitName 全程序无人读取，是预留没接上的死字段。↔ 下游 Form1.UpdateRobotPoseDisplay 只消费 J1~J6。","gotcha":"MechanicalUnitName 与 TcpX/Y/Z、Q1~Q4 一样，有赋值无读取，属死字段。"},{"a":47,"b":53,"title":"把六轴角度写进 DTO","brief":"Rax_1..Rax_6 逐行搬到 J1..J6","detail":"六行一一对应，把 robJoint 的 Rax_1..Rax_6 搬到 DTO 的 J1..J6。float 赋给 double 属性会自动加宽、不报错，但也带不来额外精度——源头就是 float，约七位有效数字就到头。单位是度，和示教器、RAPID 里的 deg 完全一致，中间没有任何弧度换算，将来喂给运动学库或三维引擎得自己转。这六个字段是 DTO 里唯一真正被界面消费的数据。↔ 下游 Form1 用 ToString(\"F2\") 刷到 txtJ1~txtJ6，精度再高也只看到两位小数。","gotcha":"源头是 float、显示是 F2，想凭界面数字反推精度会误判。"},{"a":54,"b":62,"title":"写 TCP 位置与四元数姿态","brief":"摊平 Trans 三个数和 Rot 四个数","detail":"七行把 RobTarget 的两个子结构摊平：Trans.X/Y/Z 是 TCP 位置，单位毫米（PCSDK 内部把控制器的米乘 1000 换成毫米）；Rot.Q1~Q4 是姿态四元数。四元数顺序是本块最大的坑：ABB 的 Q1 是标量 w、Q2~Q4 是 x/y/z，而 .NET Quaternion 的构造顺序是 (x, y, z, w)，照原序搬运姿态会整个错。Orient 另带 ToEulerAngles，要显示欧拉角直接调。↔ 这七个字段目前没有下游消费者。","api":"Orient.ToEulerAngles(out double x, out double y, out double z)","gotcha":"Q1 是标量 w、Q2~Q4 是 x/y/z，与 .NET Quaternion(x,y,z,w) 顺序相反，照抄顺序姿态会错。"},{"a":63,"b":70,"title":"成功返回与失败兜底","brief":"写提示语 + return true，或 catch 后拼 ex.Message","detail":"成功路径写一句中文提示再 return true；失败路径把异常压成“读取机器人姿态失败：”加 ex.Message 再 return false。两点值得注意：成功串目前没有消费者——调用方只在 !readOk 时 MessageBox.Show(message)；而只取 ex.Message 等于丢诊断信息，PCSDK 会把底层 RPC 异常再包一层，真正的 HResult 和 InnerException 全被吞掉。↔ 下游是 Form1 的弹窗与 txtJ1~txtJ6 刷新。","gotcha":"只取 ex.Message：PCSDK 包了一层的底层异常（InnerException / HResult）全丢。"},{"a":71,"b":74,"title":"方法与类收尾","brief":"四层右括号逐级闭合","detail":"四个右括号逐层收口：第 71 行闭合 ReadRobotPose 方法，第 72 行闭合 AbbRobotPoseReader 类，第 74 行闭合 ABB_Digital_Twin 命名空间，中间的 73 行是带空格的空行。这一块没有逻辑，却是判断括号归属的唯一依据——方法内有 try 和多层 if 嵌套，数括号容易出错。↔ 闭合后本文件对外只有 ReadRobotPose 一个入口，Form1 靠它拿 DTO。","gotcha":"第 73 行是带空格的空行，肉眼像空行，做文本比对或行数统计时容易误判。"}],"conn":[{"a":1,"b":8,"title":"using 区：基础库 + 两个 PCSDK 命名空间","brief":"引入 System 与泛型集合，并把 ABB 的控制器域、发现域拉进来","detail":"前 5 行是模板默认项，只用到 System 和 System.Collections.Generic，其余是残留。要紧的是第 6、7 行：Controllers 命名空间提供 Controller、ControllerFactory、ControllerInfo、UserInfo；Discovery 提供 NetworkScanner 与 ControllerInfoCollection。↔ 下游即扫描用 NetworkScanner、建连用 ControllerFactory、属性类型用 Controller。","api":"ABB.Robotics.Controllers (Controller / ControllerFactory / ControllerInfo / UserInfo)；ABB.Robotics.Controllers.Discovery (NetworkScanner / ControllerInfoCollection)"},{"a":9,"b":12,"title":"命名空间与 internal 类声明","brief":"给设备层类安家，限定它只在程序集内可见","detail":"第 9 行声明命名空间 ABB_Digital_Twin，第 11 行定义类 AbbControllerConnection，internal 只在本程序集可见。这是设备层：只做扫描、连接、断开，不碰界面、不解析位姿。↔ 上游 Form1 持有它并调 ScanControllers / ConnectFirstController / DisconnectController；下游经 CurrentController 把 Controller 交给 AbbRobotPoseReader。未连接即 null。","gotcha":"类本身没实现 IDisposable：连接的最后释放依赖 Form1_FormClosing 主动调 DisconnectController，若进程被强杀或有别的退出路径，Logoff 不会发出，控制器侧的匿名登录要等超时才释放。"},{"a":13,"b":17,"title":"两个私有字段：连接对象与扫描结果缓存","brief":"controller 是能说话的连接，controllerList 是一串名片","detail":"第 14 行是当前连接，null 表示未连接；第 17 行是扫描结果缓存，元素是 ControllerInfo。两者必须分清：ControllerInfo 只是广播里拿到的名片——IP、系统名、控制器名、版本，读不了关节角；Controller 才是能发 RPC 的连接对象。↔ 上游：controllerList 由 ScanControllers 填、被 ConnectControllerByIndex 取用；controller 由它赋值、被 DisconnectController 置 null。","api":"ABB.Robotics.Controllers.Controller；ABB.Robotics.Controllers.ControllerInfo","gotcha":"把 Controller 与 ControllerInfo 混用是最常见的坑：CreateFrom(info) 之前拿 Info 做任何读取都不行；Logon 之后 Info 里的信息又已经过时（控制器可能已经换过系统）。"},{"a":18,"b":29,"title":"两个只读属性：CurrentController 与 ControllerCount","brief":"只给 get，外部读得到但换不了引用","detail":"第 20~23 行暴露当前连接，第 26~29 行暴露扫描数量。两者都只有 get：建连与销毁必须全走 ConnectControllerByIndex / DisconnectController，若外部能赋值就会出现「属性非空但没 Logon」「旧对象没 Dispose 就被换掉」的错配。↔ 上游 Form1.button2_Click 用 ControllerCount == 0 决定要先扫；UpdateRobotPoseDisplay 把 CurrentController 传给 Reader。","gotcha":"CurrentController 返回的是内部字段本身（引用），调用方虽不能替换引用，却可以对它调 Logoff()/Dispose()，从而绕开本类的状态管理。要彻底防护得返回受限包装。"},{"a":30,"b":65,"title":"ScanControllers：清缓存 → 广播发现 → 转存 → 报结果","brief":"同步阻塞地扫局域网，把名片集合复制进自己的 List","detail":"四步：controllerList.Clear() 清掉上次结果防重复；new NetworkScanner() 造扫描器；scanner.Scan() 真正扫描；把 scanner.Controllers（ControllerInfoCollection，不是 List）用 foreach 搬进自己的 List。扫不到或抛异常都返回 false 并给中文提示。↔ 上游 Form1.button1_Click 调它并弹 message，随后调 GetControllerDisplayLines 刷 ListBox。","api":"NetworkScanner.Scan()；NetworkScanner.Controllers → ControllerInfoCollection","gotcha":"反编译可见 Scan() 内部是 Internal.NetworkScanner.Instance.GetControllers() 再拷进 _controllers，全程同步、通常数秒；它被按钮事件在 UI 线程上直接调用，所以扫描期间窗口就是「未响应」，不是死机。另外 PCSDK 自带 NetworkScanner.AddRemoteController(string address) 可手工指定 IP / 跨网段，本程序一次都没调用——跨网段或广播被防火墙挡掉的现场永远扫不到。"},{"a":66,"b":95,"title":"GetControllerDisplayLines：把名片摊成可显示的文本行","brief":"设备层只组织文本，怎么显示交给 UI 层","detail":"没扫到控制器时返回两条提示语并早退；扫到了按 index 从 1 开始，每台固定拼 7 行：分隔线、IP、系统名、RobotWare 版本、控制器名、是否虚拟、一个空字符串。为何返回 List<string> 而不直接写 ListBox？本类是设备层，引用 System.Windows.Forms 就把两层焊死。↔ 上游 Form1.button1_Click 拿到后 foreach 逐行 Add 进 listBox1；数据来自上一块填好的 controllerList。","api":"ControllerInfo.IPAddress (System.Net.IPAddress)；ControllerInfo.SystemName；ControllerInfo.Version (System.Version)；ControllerInfo.ControllerName；ControllerInfo.IsVirtual","gotcha":"列表布局本身就是坑：每台控制器占 7 个 ListBox 条目，还含一个空字符串条目。所以 listBox1.SelectedIndex 绝不能直接当控制器索引，要用 SelectedIndex / 7；而空条目既能被鼠标选中、又会让除法算错。当前靠 ConnectFirstController 固定连第 0 台，隐患未暴露；一旦改成「选中哪台连哪台」就必须重做映射（例如把 ControllerInfo 直接绑列表 + DisplayMember，或干脆不给空行）。"},{"a":96,"b":101,"title":"ConnectFirstController：一行转调的包装方法","brief":"把「连第一台」变成有名字的入口，内部转调带索引的实现","detail":"方法体只有一句 return ConnectControllerByIndex(0, out message);，索引写死 0。薄包装的价值在名字与变化点：调用方写 ConnectFirstController 语义更清楚，将来支持「手工 IP」「连选中项」时只改这一处，Form1.button2_Click 不用动；out 可原样下传。↔ 上游是 Form1.button2_Click（随后 MessageBox.Show(message)）；下游是 ConnectControllerByIndex。","gotcha":"写死 0 意味着用户无法选择连哪台：现场有两台以上控制器时只能连扫描顺序里的第一台，而这个顺序由 netscan 决定、并不稳定。"},{"a":102,"b":151,"title":"ConnectControllerByIndex：两道防御 + 断旧建新 + 匿名登录","brief":"校验下标、清旧连接、CreateFrom 建对象、Logon 登录、拼提示","detail":"顺序不能乱：先挡「列表为空」「下标越界」；取名片；DisconnectController() 清旧连接；ControllerFactory.CreateFrom(info) 造对象；Logon(UserInfo.DefaultUser) 才真正联网；成功用加号拼 4 行中文消息。失败路径必须显式 Dispose 再置 null。↔ 上游 Form1.button2_Click 弹出 message 后定时器才读位姿；下游是 ControllerFactory、Logon、UserInfo。","api":"ControllerFactory.CreateFrom(ControllerInfo info)；Controller.Logon(UserInfo user)；UserInfo.DefaultUser","gotcha":"三处坑：①反编译里 CreateFrom 只是 new Controller(FormatControllerId(info.SystemId))，不联网，不能拿它当连接成功判据；②这里说的「连接成功」实质只是 Logon 成功——控制器同一时刻只认一个用户（mastership），示教器占着时 Logon 会失败，即便成功也不代表能读位姿；③catch 只取 ex.Message，PCSDK 常把底层 RPC 异常再包一层，真原因留在 InnerException 里被丢掉。"},{"a":152,"b":175,"title":"DisconnectController：幂等断开 + finally 复位","brief":"先 Logoff 让出 mastership，再 Dispose，最后无论如何置 null","detail":"结构是 if 判空 + try { Logoff; Dispose; } catch { } finally { controller = null; }。if 让方法幂等：关窗调一次、建连前又调一次都不会崩。顺序有意义：Logoff 先发 RPC 让出 mastership，Dispose 再释放本地连接与订阅；finally 置 null 是状态一致性的唯一保证。↔ 上游 Form1_FormClosing 与 ConnectControllerByIndex。","api":"Controller.Logoff()；Controller.Dispose()","gotcha":"空 catch 会把断连失败彻底吞掉：控制器已关机或断网时 Logoff 抛异常，程序不留任何痕迹，事后查不到「这次到底退没退出登录」。取舍是关程序时不该再弹框，但至少该 Debug.WriteLine 一行留证。另外 finally { controller = null; } 不可挪到 try 末尾——Logoff 一抛就跳过它，字段留着半死对象，CurrentController 就谎报「还连着」。"}],"form":[{"a":1,"b":10,"title":"文件头的 using 清单","brief":"新建 WinForms 项目时自动生成的模板，一半没用上","detail":"这十行是新建 WinForms 项目自动生成的 using 模板。本文件真用到的只有 `System`（`EventArgs`）、`Collections.Generic`（`List<string>`）、`Windows.Forms`（`Form`/`MessageBox`/`Timer`），其余六个都没用上。↔ 下三层的类型都在同一命名空间，不写 using 也能互相引用；第 10、11 行是连续两行空行，不是排错。"},{"a":11,"b":15,"title":"命名空间与类声明：partial 是什么","brief":"Form1 只是这个类的两半之一，另一半在 Designer.cs","detail":"把 `Form1` 声明成命名空间里的 `partial class` 并继承 `Form`。`partial` 是编译期合并：本文件写逻辑，`Form1.Designer.cs` 写控件与 `InitializeComponent()`，两半私有成员互见——所以这里能直接写 `txtJ1.Text`，而它声明在 Designer 第 383 行。↔ 上游 Designer 的事件接线（如第 76 行接 `button1_Click`），下游是第 16~18 行三个字段。"},{"a":16,"b":18,"title":"三个字段：两个协作者 + 一个定时器","brief":"组合而非继承，UI 层只做调度","detail":"`abbService`（设备层）和 `poseReader`（数据层）是 new 出来的字段，Form1 持有而不继承，UI 只剩调度职责；两个都没写修饰符，类成员默认 `private`。第三个 `poseTimer` 特意写全名：`System.Threading.Timer` 回调在线程池线程上，改控件必抛跨线程异常；WinForms 版靠 WM_TIMER 驱动，`Tick` 天生在 UI 线程。↔ 下游是 `ScanControllers` 与 `ReadRobotPose`。","gotcha":"用错 Timer 类型（`System.Threading.Timer` 或 `System.Timers.Timer`）会让 `Tick` 在非 UI 线程执行，碰控件必抛跨线程异常。"},{"a":19,"b":33,"title":"构造函数：控件创建 + 定时器配置 + 事件订阅","brief":"new Form1() 时跑一次，四件事一次做完","detail":"构造函数四件事：`InitializeComponent()` 造控件、`Interval = 500` 定节拍、`Tick += PoseTimer_Tick` 挂事件、`FormClosing += Form1_FormClosing` 挂清理。500ms 即每秒 2 次；`Interval` 只是精度上限，单次读取耗时会把实际周期拉长，所以注释建议稳定后再降到 200。↔ 上游 `Application.Run(new Form1())`；下游第 32 行与 Designer 第 367 行的重复订阅。","gotcha":"`FormClosing` 在本文件第 32 行和 Form1.Designer.cs 第 367 行各订阅了一次，关闭窗口时 `Form1_FormClosing` 会连跑两遍；目前只因逻辑幂等才没出事，应删掉其中一处。"},{"a":34,"b":52,"title":"PoseTimer_Tick：每 500ms 读一次，失败停表并弹框","brief":"轮询入口，成败都在这里收口","detail":"每 Tick 调 `UpdateRobotPoseDisplay(false)` 读一次；返回 false 就 `poseTimer.Stop()` 再弹模态 `MessageBox`。毛病在『用弹窗做错误通道』：`Show` 自带模态消息循环，窗口被冻到用户点确定；现场没人时程序就停在这个框上，读数不更新也没重试出口。好在第 48 行先 Stop 后 Show，不会自己叠出第二层框。↔ 上游构造函数第 29 行；下游 `ReadRobotPose`。","gotcha":"模态弹框代替状态显示：无人在位时程序永久停在对话框上，读数停滞且界面无响应。"},{"a":53,"b":73,"title":"button1_Click：扫描控制器（同步阻塞）","brief":"清列表 → 扫描 → 无视成败都填列表 → 失败才弹框","detail":"流程：清空 `listBox1` → `ScanControllers(out message)` → 把 `GetControllerDisplayLines()` 的行无条件填进列表 → 只有 `scanOk == false` 才弹框。0 台时该函数自己返回两行提示，于是失败时列表有内容、又弹一个框，同一件事说两遍。扫描是广播发现，同步阻塞数秒且跑在 UI 线程，界面必然假死。↔ 下游 `AbbControllerConnection.ScanControllers`。","api":"NetworkScanner.Scan()","gotcha":"扫描期间没有禁用按钮；同步扫描跑在 UI 线程上，窗口重绘和点击全部停顿（假死）。"},{"a":74,"b":93,"title":"button2_Click：连接控制器","brief":"固定连第 0 台，完全忽略列表选中项","detail":"先看 `ControllerCount == 0` 就自动补扫一次，失败则弹框并 `return`；然后无条件 `ConnectFirstController`，最后不管成败都 `Show(message)`，成功失败靠文字区分而非返回值。问题：它内部就是 `ConnectControllerByIndex(0, ...)`，`SelectedIndex` 一次没读，选第 2 台仍连第 1 台；`connectOk` 也没用。↔ 下游 Connection 三个方法。","api":"ControllerFactory.CreateFrom(ControllerInfo info); Controller.Logon(UserInfo user)","gotcha":"连接固定取索引 0，忽略 `listBox1.SelectedIndex`，现成的 `ConnectControllerByIndex` 没被调用；且只要 `ControllerCount` 非 0 就跳过重扫，可能连到很久以前扫出的旧列表。"},{"a":94,"b":103,"title":"Form1_FormClosing：关窗清理","brief":"先停轮询，再断连接，顺序不能反","detail":"两行有效代码，顺序是关键：先 `poseTimer.Stop()` 再 `DisconnectController()`。若先断连接而定时器还活着，下一个 Tick 就拿着已 `Dispose` 的 Controller 去读——轻则异常冒到 WinForms 全局未处理对话框，重则卡在同步调用里让窗口关不掉。先停表等于先关掉唯一会碰 Controller 的定时源。↔ 上游两处订阅；下游 Connection 的断开方法。","api":"Controller.Logoff(); Controller.Dispose()"},{"a":104,"b":108,"title":"button3_Click：单次读取","brief":"传 true，失败就弹框","detail":"三行方法：调 `UpdateRobotPoseDisplay(true)` 后把返回值丢掉。传 `true` 是它和 Timer 那条路唯一区别——用户手点按钮时正盯着屏幕，愿意为一次失败付一个弹框；Timer 传 `false`，由 Tick 自己决定弹不弹。返回值被丢弃，所以『这次没读到』除了弹框没有任何痕迹。↔ 上游 Designer 第 111 行；下游第 120 行核心方法。"},{"a":109,"b":133,"title":"核心方法签名与『设备层 → 数据层』交接","brief":"showErrorMessage 开关 + 三个 out 实参","detail":"`UpdateRobotPoseDisplay(bool showErrorMessage)` 是全程序唯一的『DLL 数据→界面文本』入口，全文件只两处调它（Tick 传 false、按钮传 true）。先声明 `poseData`、`message` 再作为 `out` 实参交给 `ReadRobotPose(abbService.CurrentController, ...)`：`out` 由语言保证被调方正常返回时必已赋值，所以不必初始化。这一行是两个分层的接缝。↔ 下游 Reader。","api":"MechanicalUnit.GetPosition(); MechanicalUnit.GetPosition(CoordinateSystemType.World)","gotcha":"Reader 内部把关节角和笛卡尔两次 `GetPosition` 放在同一个 try 里，笛卡尔那次对非 TcpRobot 单元会抛异常，结果把已经读到的关节角也一起判成失败。"},{"a":134,"b":157,"title":"失败弹窗与 J1~J6 落屏","brief":"唯一显示通道：只写了 6 个 TextBox","detail":"失败分支：只有 `showErrorMessage == true` 才弹 `message`，然后返回 false，好让 Tick 那条路自己控制提示时机。成功分支把 J1~J6 用 `ToString(\"F2\")` 写进 6 个 TextBox 后返回 true——显示到此为止。`F2` 是定点两位小数（不是两位有效数字），小数点符号随 `CultureInfo` 变。DTO 里 TCP、四元数、单元名都赋了值却没人读。↔ 上游 Reader；下游 `txtJ1..txtJ6`。","api":"RobJoint.Rax_1..Rax_6 (float); RobTarget.Trans.X/Y/Z (mm)","gotcha":"若当前活动机械单元是外轴（MultiAxes/SingleAxis），`GetPosition()` 把角度塞进 `ExtAx`、`RobAx` 全 0，这里会安静地显示 0.00 而 `readOk` 仍为 true。"},{"a":158,"b":162,"title":"Form1_Load：空的事件处理","brief":"挂着但一行逻辑都没有","detail":"方法体是空的，什么都不做。Designer 第 368 行确实还挂着 `this.Load += new System.EventHandler(this.Form1_Load)`，所以它不是没人引用的野方法，但它也确实没有一行逻辑：既不初始化界面、不预连接控制器、也不读配置。这种『挂着但空』的处理方法最容易让人误以为『初始化已经做过了』。↔ 上游 Designer 的 `Load` 订阅；下游无。"},{"a":163,"b":180,"title":"btnStartRealTime_Click：启动轮询","brief":"先试读一次，读得到才启动定时器","detail":"顺序是对的：先 `UpdateRobotPoseDisplay(true)` 手动读一次（失败会弹具体原因），读不到就 `return` 不启动定时器——避免刚起步就每 500ms 失败刷屏；读到才 `Start()`。最后那句『已开始』是纯提示，弹在 `Start()` 之后：模态框一挡住界面，第一屏读数就过时了。`Start()` 幂等，重复点不叠加节拍。↔ 上游 Designer 第 273 行；下游 `Start()` 与 Tick。","gotcha":"没有『是否已在运行』的判断：重复点『开始』会再试读一次并再弹一次提示；启动提示框弹在 `Start()` 之后，形同装饰。"},{"a":181,"b":188,"title":"btnStopRealTime_Click：停止轮询","brief":"停表 + 一句提示，但没有状态复位","detail":"`poseTimer.Stop()` 停表，再弹『已停止』。停下来的效果只是 Tick 不再触发，界面上的 J1~J6 保留最后一次的值原样不动——没清空、没置灰，看不出是历史值还是实时值，这是实时监控界面常见的坑；正规做法是停表时给个状态标识，比如标题加『已停止』。重复 `Stop()` 无害。↔ 上游 Designer 第 285 行；下游与 Tick 里失败停表同一句。"},{"a":189,"b":198,"title":"两个空方法：死代码与调试残留","brief":"toolStripLabel1 控件已经不存在了","detail":"`toolStripLabel1_Click` 对应的控件在 `Form1.Designer.cs` 里根本没声明（全文搜不到 `toolStripLabel1`），是没人调用的孤儿方法；编译能过只因为它是普通方法。`toolStripMenuItem2_Click` 倒是真接了线（Designer 第 323 行），挂在菜单项『12231』上，点了什么都不发生，明显是调试残留。删掉这两个方法不影响行为。↔ 上游 Designer 第 323 行；下游无。","gotcha":"菜单文字『12231』『12121』是明显的调试残留，交付前应整段删掉。"},{"a":199,"b":200,"title":"收尾：闭合类与命名空间","brief":"两个右括号，顺带看全文件的异常策略","detail":"第 199 行闭合 `partial class Form1`，第 200 行闭合 `namespace ABB_Digital_Twin`。顺带点一件全文件级的事：这里从头到尾没有一个 `try/catch`——异常全靠下两层各自兜住（Connection 的扫描/连接/断开、Reader 的读取）。代价是任何没被下层捕获的异常会直接冒到 WinForms 全局未处理异常对话框，能否继续取决于用户点『继续』还是『退出』。"}],"designer":[{"a":1,"b":4,"title":"命名空间与 partial class：为什么全文一行 using 都没有","brief":"用完全限定名写类型所以不需要 using；只写 partial class Form1，基类交给 Form1.cs 那半边","detail":"这四行定下全文写法：namespace 把 Form1 关进 ABB_Digital_Twin；class 前写 partial，表示这里只是 Form1 的一半，另一半在同目录 Form1.cs 里。这里故意不写「: Form」——两半合成一个类，基类只需一处声明，设计师把这处留给手写那半，避免改一处漏一处。全文没有一行 using，是因为设计器一律用完全限定名：好处是永不与同名类型冲突，代价是啰嗦。↔ 与 Form1.cs 第 14 行的 partial class Form1 : Form 配对读。","gotcha":"Designer.cs 里的 using 会在设计器重新生成时被清掉，别在这半边加。"},{"a":5,"b":9,"title":"components 字段：所有组件的统一释放登记处","brief":"IContainer 容器字段，初值 null，登记进去的组件由它一次性释放","detail":"三行三斜线注释加一行字段声明。components 是 IContainer 类型的字段，初值 null，它就是设计师的释放登记处：任何 IComponent（右键菜单、Timer 等）登记进去，窗体释放时一句 components.Dispose() 全部带走，不必逐个写 Dispose。名字 components 是硬约定，别改；这里只声明不创建，真正 new 在第 31 行。↔ 下游第 57~59 行把 this.components 传进右键菜单构造；Dispose 第 16 行判空、第 18 行调用它。","gotcha":"手工 new 的组件（如 Form1.cs 第 18 行的 poseTimer）不登记就不受它管。"},{"a":10,"b":22,"title":"Dispose(bool)：VS 标准的三步释放模板","brief":"判条件 → 释放登记组件 → base.Dispose 收尾，三步缺一不可","detail":"这是 VS 标准的释放模板，方法体只有三步：判条件（disposing 为真且 components 非空）→ components.Dispose() → base.Dispose(disposing)。disposing 为 false 是终结器路径，那时碰托管对象会出问题，所以条件里必须带它；判空防窗体没建成。最后那句不能省，漏了控件句柄不销毁，反复开关会泄漏句柄。↔ 与 Form1.cs 第 95~103 行 Form1_FormClosing 是两条互补路径：那边停定时器、断控制器连接，这边只管 UI 组件。","gotcha":"模板只释放登记过的组件；没登记的托管资源得自己在 FormClosing 里清。"},{"a":23,"b":30,"title":"#region 与 InitializeComponent 签名","brief":"折叠区标记 + 无参无返回的 InitializeComponent，注释明确警告不要手改","detail":"#region 把整段设计器代码折成一栏；29 行声明 InitializeComponent，无参无返回。三斜线注释是设计师的原话：本方法由设计器支持、不要手改——窗体设计器一保存就整段重写，手写的内容会被覆盖，要改界面请回设计器拖控件。方法内部顺序固定：new 控件 → SuspendLayout → 逐个设属性 → Controls.Add → ResumeLayout。↔ 调用方是 Form1.cs 第 21 行构造函数里的 InitializeComponent()，一 new 窗体控件就都建好、接好事件。","gotcha":"手写逻辑必须放进构造函数或 Load 事件，写进这里下次保存即被覆盖。"},{"a":31,"b":32,"title":"组件容器实例与资源管理器","brief":"new Container() 赋给 components；另建 ComponentResourceManager 供后半段取图标","detail":"第 31 行把 components 从 null 变成 Container 实例，这是后面右键菜单能登记、Dispose 能工作的前提。第 32 行建 ComponentResourceManager(typeof(Form1))，职责是按名字从 Form1.resx 取对象；本任务范围内它一次都没被用到（设图标那句在文件末尾），设计师照模板总会生成，手删了那句就编译不过。它不是 IComponent，所以不进 components。↔ 上游是第 8 行的字段声明，下游是第 57~59 行的登记与末尾的图标设置。","gotcha":"resources 这 30 行里完全没用到，看似死代码，删了会让末尾设图标那行报错。"},{"a":33,"b":62,"title":"30 个控件的 new：构造顺序不是显示顺序","brief":"只负责建对象，属性还是默认值；顺序是拖控件顺序，与屏幕位置无关","detail":"这 30 行只做一件事：new 出每个控件并赋给同名字段。此时它们还没上窗体（Controls.Add 在文件末尾），属性都是默认值，配置在后面每个控件各自的注释段里。顺序很乱：txtJ4 在 txtJ3 之前、label3 的文本却是 J4——只是拖控件的先后，与屏幕位置无关；位置看 Location，层级看 Controls.Add 的先后。第 57~59 行把 this.components 传进右键菜单，这是它们随窗体释放的唯一原因。↔ 下游接 378~407 行字段声明与末尾 Controls.Add。","gotcha":"三个 ContextMenuStrip 没被任何控件的 ContextMenuStrip 属性引用，是空菜单残留。"},{"a":63,"b":64,"title":"SuspendLayout：冻结布局换性能与不闪","brief":"先冻结子控件 menuStrip2、再冻结窗体，避免每改一个属性就重排重绘","detail":"这两行是性能与不闪的关键闸门。SuspendLayout() 一旦挂上，冻结期间设 Location/Size 只改字段，不立刻触发父容器重排重绘；否则 30 个控件、上百次赋值每次都让窗体算一遍坐标，既慢又闪。顺序上先冻结子控件 menuStrip2、再冻结窗体，恢复时正好反过来。冻结几次就要恢复几次。↔ 严格配对的是文件末尾的 ResumeLayout()/PerformLayout()，漏配对控件会全挤在左上角。","gotcha":"SuspendLayout 与 ResumeLayout 必须成对；只冻结不恢复，窗体显示时布局是残缺的。"},{"a":65,"b":76,"title":"button1「扫描控制器」：位置、字体、事件接线","brief":"左下角绝对定位 (12,219)、165×52、Tab 序第 0，Click 接 button1_Click","detail":"三行分隔注释加 8 行属性：把「扫描控制器」按钮钉死在左下 (12,219)、165×52、字体微软雅黑 9 点、Tab 序 0，最后一行把 Click 接到 button1_Click。绝对定位意味着窗体缩放时它不跟着动（没有 Anchor/Dock）。点下去先清空 listBox1，再调 ScanControllers 扫描局域网控制器，把结果逐行塞进 Items。↔ 处理方法是 Form1.cs 第 54 行 button1_Click；扫描是同步阻塞的，会卡界面数秒。","gotcha":"y=219 与 button2 的 216 差 3 像素，界面上看得出歪。"},{"a":77,"b":88,"title":"listBox1：只占左侧的控制器列表","brief":"FormattingEnabled + ItemHeight=20 + (12,84) 382×124，只够 6 行，多了要滚动","detail":"这个 ListBox 只设了字体、FormattingEnabled、ItemHeight=20、位置 (12,84)、尺寸 382×124、Tab 序 1；没设 SelectionMode（默认单选）、没设多列、也没设 Text——内容只能靠 Items 集合加。382 的宽说明它只占左侧，右边留给关节角区；124 高除 20 只够 6 行，扫描到第 7 台就出滚动条。↔ 数据来自 button1_Click 里的 listBox1.Items.Add(line)。","gotcha":"124 不是 20 的整数倍，IntegralHeight 默认 true，实际高度可能被吸附成 120（未验证）。"},{"a":89,"b":100,"title":"button2「连接控制器」：与 button1 不成对的对齐","brief":"(229,216)、165×52、Tab 序 2，Click 接 button2_Click","detail":"同样 8 行属性：位置 (229,216)、165×52、「连接控制器」、Tab 序 2、Click 接 button2_Click。两个按钮本应并排成一条线，实际 x=229 减掉 button1 右边缘（12+165=177）还空出 52 像素，y=216 又比 219 高 3 像素——一处水平留白、一处垂直错位，都是手拖留下的。↔ 处理方法在 Form1.cs 第 75 行：没扫过就先扫，再 ConnectFirstController 连第一台并弹框。","gotcha":"ConnectFirstController 写死只连第一台，界面没提供选择列表。"},{"a":101,"b":112,"title":"button3「读取六轴姿态」：页面上唯一的手动读取入口","brief":"(623,37)、164×52、Tab 序 3，Click 接 button3_Click","detail":"把「读取六轴姿态」按钮放在 (623,37)、164×52，Tab 序 3，Click 接 button3_Click。它不在下方按钮行，而跑到窗体右上方、六个输入框之上，是唯一「手动读一次」的入口；宽度 164 比前面按钮少 1 像素，说明不是拖出来的副本。↔ button3_Click（Form1.cs 第 105 行）只有一行 UpdateRobotPoseDisplay(true)，读一次并写进 txtJ1~txtJ6，失败弹框。","gotcha":"失败提示只给 ex.Message，真正原因在 InnerException 里看不到。"},{"a":113,"b":128,"title":"第一行：label1「J1 :」与 txtJ1","brief":"AutoSize 标签在 (642,164)，文本框在 (690,160) 67×27","detail":"六行显示区的第一行：label1 是 AutoSize 的「J1 :」，Size(32,20) 只是设计器按文字算出的记录值、运行时会自己撑开；txtJ1 在 (690,160)、67×27。x 从 642 到 690 差约 48 像素，就是标签与数值框之间那道白；标签 y 比框高 4 像素，让文字视觉上与数字齐平。这一行都没写 Font，所以继承窗体的字体。↔ 值来自 Form1.cs 第 149 行 txtJ1.Text = poseData.J1.ToString(\"F2\")。","gotcha":"六个 txtJ* 都没设 ReadOnly，界面数值可被手动改写，与控制器真实状态不一致却无提示。"},{"a":129,"b":144,"title":"第二行：txtJ2 与 label2「J2 :」","brief":"文本框 (690,193)，标签 AutoSize 在 (641,196)；y 相差 33 正好一行","detail":"第二行先出框后出标签，是拖控件的顺序：txtJ2 的 TabIndex=7、label2 是 6，Tab 键仍先停标签。y 从 160 到 193 差 33，配 27 的框高约留 6 像素行间；label2 的 x=641 比 label1 的 642 少 1 像素，是手拖抖动，肉眼看不出。↔ 与第一行同源：UpdateRobotPoseDisplay 里 txtJ2.Text = poseData.J2.ToString(\"F2\")。","gotcha":"67 像素宽只容得下约七字符，角度到 -1234.56 这类数值会显示不全。"},{"a":145,"b":160,"title":"第四行先出场：txtJ4 与 label3「J4 :」","brief":"命名陷阱：变量叫 label3，文本却是「J4 :」；位置 y=261/264 确实是第四行","detail":"这块有个最容易误读的命名陷阱：label3 的 Text 是「J4 :」——变量编号 3，内容却是第 4 轴。原因是先拖了这一对、后拖 J3 那一对，设计师按创建顺序发编号；位置却对得上内容：txtJ4 在 y=261、label3 在 y=264，正是自上而下第四行。↔ 这一行装 poseData.J4，由 UpdateRobotPoseDisplay（Form1.cs 第 152 行）写入。","gotcha":"读这份文件不能靠变量名猜轴号，要看 Text 和 y，否则 J3/J4 两行必混。"},{"a":161,"b":176,"title":"第三行补位：txtJ3 与 label4「J3 :」","brief":"文本框 (690,228)，标签在 (642,232)；它与上一行差 35，比别处多 2 像素","detail":"对称的另一半：label4 的 Text 是「J3 :」，txtJ3 在 (690,228)、label4 在 (642,232)，是自上而下第三行。y 从上一行 193 到 228 差 35，比其它行的 33 多 2 像素——六行并非严格等距，第三行往下压了一点。TabIndex 8/9 让 Tab 顺序仍是 J1→J2→J3→J4，因为 TabIndex 按创建顺序发，恰好与视觉顺序一致。↔ poseData.J3 由 UpdateRobotPoseDisplay 写入。","gotcha":"Tab 顺序与视觉顺序一致只是巧合，新增控件后必须回设计器重排 TabIndex。"},{"a":177,"b":192,"title":"第六行先出场：txtJ6 与 label5「J6 :」","brief":"文本框 (690,327) 是最低一行，配它的 label5 文本却是「J6 :」","detail":"又是命名错位：txtJ6 在 (690,327)，是六行里最低的一行，配它的标签却叫 label5、文本「J6 :」，位置 (641,330)。label 的 y 一贯比对应文本框多 3~4 像素，是让标签文字与框内数字视觉齐平。TabIndex 14/15 也是所有显示控件里最大的两个。↔ 这里是 poseData.J6 的落点，由 UpdateRobotPoseDisplay（Form1.cs 第 154 行）写入。","gotcha":"六行显示区里 label5/label6 与 txtJ5/txtJ6 的编号是交叉的，只认 Text 与 y。"},{"a":193,"b":208,"title":"第五行收尾：txtJ5 与 label6「J5 :」","brief":"文本框 (690,294)，label6 的文本是「J5 :」；六行显示区到本块结束","detail":"补上第五行：txtJ5 在 (690,294)、label6 的 Text 是「J5 :」在 (642,298)，Tab 序 12/13。六行看完得出规律：label1=J1、label2=J2、label4=J3、label3=J4、label6=J5、label5=J6，而屏幕顺序始终是 J1→J6 自上而下——位置对、名字乱。208 行是 label7 那一段的分隔注释。↔ 之后（209 行起）是六个「度」单位标签与实时读取按钮，归另一位同事。","gotcha":"到本块结束，六个数值框都还没有单位标签，单位「度」由 209 行以后的 label7~label12 补上。"},{"a":209,"b":217,"title":"label7：第一个「度」字单位标签","brief":"给 J1 的文本框右侧摆一个只显示「度」的标签","detail":"定义六个单位标签的第一个。AutoSize=true 让宽度随「度」字收缩，Location=(763,164) 贴在 txtJ1 右侧（文本框右边缘 690+67=757，留 6 像素）。↔ 数据来自 Form1.cs 的 UpdateRobotPoseDisplay：那里只把 poseData.J1 用 ToString(「F2」) 写进框内，单位写不进去。坑：TextBox 没有「后缀」属性，要在框内显示「90.00 度」得拼字符串、污染可编辑文本，故用独立 Label，代价是手写坐标。","api":"Label.AutoSize（System.Windows.Forms.Label）","gotcha":"单位标签靠手写坐标对位，字体或 DPI 一变就错开"},{"a":218,"b":262,"title":"label8~label12：另外五个「度」字标签","brief":"同一套属性的复制粘贴，只改 Name、Location、TabIndex","detail":"这五块是 label8~label12，属性照抄 label7（AutoSize、尺寸、文字都相同），只改 Name、Location、TabIndex：x 全是 763 排一列，y 依次 196/231/264/298/330，TabIndex 连号 17~21。y 比 txtJ2~txtJ6 各低 3~4 像素——文本框高 27、标签高 20，下移半个差值求视觉居中。↔ 共同服务 UpdateRobotPoseDisplay 的六行赋值。坑：无容器兜底，缩放或换字体会错位。","gotcha":"六个标签各写一遍坐标，改布局得改六处"},{"a":263,"b":274,"title":"btnStartRealTime：开始实时读取按钮","brief":"164×52 的按钮 (559,101)，点一下启动 500ms 定时器","detail":"定义「开始实时读取」按钮：Font 显式设为 9pt 微软雅黑（与窗体级相同，属冗余），Location=(559,101)、Size=164×52，是第二排靠左那个，TabIndex=22 排在标签文本框之后，属后追加。273 行把 Click 接到 btnStartRealTime_Click：先手动读一次，成功才 poseTimer.Start() 并弹框。↔ 上游是构造函数里 Interval=500 的定时器，下游是 PoseTimer_Tick。它不判断是否已运行，连点只重复 Start。","api":"Button.Click += EventHandler（Form1.btnStartRealTime_Click）"},{"a":275,"b":286,"title":"btnStopRealTime：停止实时读取按钮","brief":"与开始按钮同尺寸，(729,101)，中间只隔 6 像素","detail":"定义「停止实时读取」按钮，结构照抄左边：9pt 雅黑、164×52、UseVisualStyleBackColor=true。位置 (729,101) 紧接 btnStartRealTime：559+164=723，729-723=6，只隔 6 像素，像一对孪生按钮，但宽度都是 164，没贴成一条长条。↔ 285 行接 btnStopRealTime_Click，方法体只有 Stop() 加一句 MessageBox。坑：GetPosition 卡在网络往返时消息循环被占，点它要等读取返回才响应。","api":"Button.Click += EventHandler（Form1.btnStopRealTime_Click）"},{"a":287,"b":304,"title":"contextMenuStrip1/2/3：三个空的右键菜单","brief":"Size 高度只有 4，一个菜单项都没有，也没人引用","detail":"连续定义三个右键菜单，每个只设三样：ImageScalingSize=20×20（菜单项图标缩放尺寸，本程序没图标，纯默认值）、Name、Size=(61,4)。高度 4 是关键证据：每多一个 ToolStripItem 高度就加二十几像素，4 说明门可罗雀，是空壳。↔ 全文件没有任何控件的 ContextMenuStrip 属性指向它们，右键也弹不出来；它们只在 57~59 行被塞进 components，Dispose 时顺带释放。坑：这是拖进来没配置的残留，删掉这三段和三条字段声明，功能零影响。","gotcha":"空 ContextMenuStrip 既无 Items、也无人绑定，永远不会显示"},{"a":305,"b":315,"title":"menuStrip2：窗体顶部那条菜单条","brief":"966×28 贴在 (0,0)，一次挂入唯一顶级菜单项","detail":"定义顶部菜单条 MenuStrip：ImageScalingSize=20×20（图标缩放，未用图标故无效）；308~309 行用 Items.AddRange 一次挂成唯一顶级项；Location=(0,0) 钉在左上角；Size=966×28 与 ClientSize 同宽，28 是 9pt 字体行高加内边距；TabIndex=30 为全文最大。↔ 369~370 行还要单独 ResumeLayout，与 63 行的 SuspendLayout 配对。注：未写 Dock，靠控件默认 Dock=Top 停靠。","api":"MenuStrip.Items.AddRange(ToolStripItem[])"},{"a":316,"b":324,"title":"toolStripMenuItem2：标题为「12231」的顶级菜单项","brief":"测试数字当菜单名，还挂了个空的 Click 处理方法","detail":"菜单条上唯一的顶级项：318~319 行用 DropDownItems.AddRange 挂入子项 toolStripMenuItem4；Size=68×24 里 68 是「12231」五个字符的量测宽度，24 是菜单行高；323 行把 Click 接到 toolStripMenuItem2_Click。Text=「12231」毫无业务含义，是随手敲的测试字符。↔ 那个 Click 是空方法（Form1.cs 里 toolStripLabel1_Click 也空）。坑：用户看到菜单写着五个数字，会以为程序没做完。"},{"a":325,"b":330,"title":"toolStripMenuItem4：下拉里唯一的子项「12121」","brief":"224×26 的菜单行，没有 Click 订阅，点了无反应","detail":"定义 toolStripMenuItem4，它是 toolStripMenuItem2 下拉里唯一的子项，也是菜单链末端。只有三个属性：Name、Size=224×26、Text=「12121」。224 是下拉菜单预留宽度（总比文字宽，方便以后加长项），26 是标准菜单行高；它没订阅 Click，点了什么都不会发生。↔ 两级 AddRange 才让它上屏：319 行挂到父项，父项又在 309 行挂进 menuStrip2.Items。坑：编号从 2 跳到 4，中途删过一项。"},{"a":331,"b":335,"title":"窗体自身属性：AutoScale、AutoScaleMode、ClientSize","brief":"以 9pt 雅黑一行 20px 为设计基准，客户区 966×569","detail":"从这行起不再设子控件，改设 Form1 自己。AutoScaleDimensions=(9F,20F) 记录设计时的字体度量：9pt 微软雅黑一行约 20 像素；AutoScaleMode=Font 让运行时用当前字体度量除以设计值得到缩放系数，再乘到每个子控件的 Location 与 Size 上。ClientSize=966×569 是客户区（不含标题栏）大小。↔ 它也解释了上文 Margin/Padding 垂直值为何取 4：按 20 像素字高算的。坑：六个「度」标签手写坐标，换缩放仍可能错位。","api":"Form.AutoScaleDimensions / Form.AutoScaleMode / Form.ClientSize"},{"a":336,"b":360,"title":"25 次 Controls.Add：Z 序是从后往前叠的","brief":"先加停止按钮，最后加 menuStrip2，后者位于最底层","detail":"336~360 行按「倒序」把 25 个控件挂到窗体上。WinForms 里 Controls.Add 追加到集合末尾，末尾的控件先绘制、位于 Z 序最底层；所以这段反着写的顺序，实际得到 menuStrip2 在最底、btnStopRealTime 在最上。25 个控件坐标互不重叠，层序看不出来。↔ 它们正是 33~62 行 new 出来的那批（30 个 new 减 2 个菜单项、3 个右键菜单）。坑：哪天 listBox1 放大压住按钮，才需改顺序或 BringToFront。","api":"Control.ControlCollection.Add(Control)","gotcha":"Add 顺序 = 从上层到下层，最后 Add 的位于最底"},{"a":361,"b":364,"title":"窗体字体、图标、外边距与名字","brief":"9pt 雅黑作窗体级字体，子控件不设即继承","detail":"361 行设窗体级 Font 为 9pt 微软雅黑、单位 Point，参数 134 是字符集 GB2312_CHARSET；子控件不设 Font 就继承它，txtJ1~txtJ6 都没设，所以显示的就是它。362 行 Icon 从 Form1.resx 二进制资源取：resources 是第 32 行 new 的 ComponentResourceManager，$this.Icon 是键名。363 行 Margin 对顶层窗体无视觉效果。364 行 Name 让 typeof(Form1) 对上资源名。"},{"a":365,"b":366,"title":"StartPosition 与标题栏文字","brief":"启动居中，标题写「喷涂机械臂数字孪生系统」","detail":"365 行 StartPosition=CenterScreen 让窗口首次显示时出现在屏幕正中（多屏按主屏算），而不是系统默认的位置算法。366 行 Text 是标题栏文字「喷涂机械臂数字孪生系统」。↔ 这条标题是判断程序定位的关键证据：全程序只有 Form1 界面加 PCSDK 读关节角，没有任何 3D 模型或场景渲染代码，「数字孪生」只停留在名字上，真正干活的仍是 Form1.cs 的 UpdateRobotPoseDisplay。坑：Text 同时是可访问性名称，读屏软件与 UI 自动化读到的就是这串字。"},{"a":367,"b":368,"title":"FormClosing 与 Load 事件订阅","brief":"关窗时停定时器断连接，但 FormClosing 被订阅了两次","detail":"367 行把窗体关闭事件接到 Form1.cs 的 Form1_FormClosing：先 poseTimer.Stop() 再 DisconnectController()，防止关窗后定时器还在读、连接没释放。368 行 Load 接 Form1_Load，而该方法是空的。↔ 这两行是设计器里仅有的窗体级事件接线。坑（重点）：Form1.cs 构造函数第 32 行又订阅了一次 FormClosing，同一处理者挂两遍，多播使关窗时方法连跑两遍；Stop 与 Disconnect 幂等所以无害，但应只留一处。","api":"Form.FormClosing += FormClosingEventHandler / Form.Load += EventHandler","gotcha":"FormClosing 被订阅两次，关闭窗口时处理方法跑两遍"},{"a":369,"b":376,"title":"ResumeLayout 收尾与 #endregion","brief":"恢复布局、真正排一次版，然后结束设计器生成区","detail":"369~370 先恢复 menuStrip2 布局：MenuStrip 是复合控件，内部还有 ToolStripItem 布局链，63 行 SuspendLayout 过，必须配对 ResumeLayout(false) 再 PerformLayout()。371~372 行是整个窗体收尾：恢复绘制并立刻按最终尺寸重算位置，避免控件先画错再跳一下。374 行闭合 InitializeComponent，376 行 #endregion。↔ 与 63~64 行两个 SuspendLayout 配对，少一侧布局不更新。","api":"Control.SuspendLayout / ResumeLayout / PerformLayout"},{"a":377,"b":409,"title":"#endregion 之后的 30 条字段声明","brief":"全部 private、无初始化，是界面控件的引用清单","detail":"378~407 行是 30 个控件字段声明，全部 private、无 static、不 new 也无初值，只占一个引用。放在 #endregion 之后是设计器惯例：上面 #region 是会被重新生成的属性赋值方法，下面是字段清单，改界面时只重写方法体。它们与 33~62 行 new 出来的是同一批对象。↔ 声明顺序与 new 顺序一致，但与界面逻辑顺序 J1…J6 不同（txtJ4 在 txtJ3 前），无害。408 行闭合 partial class Form1，409 行闭合命名空间。"}]},"lines":{"program":{"1":"引入 System 基础命名空间；[STAThread] 这个特性就来自它，本行确实在用","2":"引入集合命名空间，本文件一个泛型集合都没用，是 VS 模板自带的冗余行","3":"引入 LINQ，本文件没有任何查询或扩展方法调用，同样用不到","4":"引入 Task 异步命名空间，本文件是纯同步代码，这行也没用","5":"引入 WinForms 命名空间；Application、Form1 都靠它，是本文件必需的一行","6":"","7":"声明命名空间，把程序集里的类型都归到 ABB_Digital_Twin 这个名字下","8":"命名空间左括号，从这到第 22 行都属于 ABB_Digital_Twin","9":["声明程序入口类；internal 只对本程序集可见，static 表示不能 new 出实例","为什么必须 static：Main 是运行时按名字在类型上查找的入口，不属于任何对象，只能是静态方法。标 internal 就够了，编出来的 exe 不需要把它暴露给别的程序集。static 类里所有成员也必须是静态的，这也是第 15 行 Main 必须写 static 的另一层原因"],"10":"类体左括号，里面只装一个 Main 方法","11":"XML 文档注释开始，写给编译器与 IntelliSense 看的说明块","12":"文档注释的内容：这是应用程序的主入口点","13":"文档注释结束，收了上面两行的说明块","14":["标记 Main 运行在单线程单元（STA）里，这是 WinForms 的硬性要求","STA 的意思是一次只允许一个线程访问该单元内的 COM 对象。剪贴板、拖放、部分 ActiveX 控件（还有后面会用的 MessageBox、文件对话框）都要求调用线程处于 STA。CLR 在进入 Main 之前读取这个特性并设置线程的单元状态，所以它是「看着像注释、实际影响运行」的典型"],"15":"Main 的签名：static 无参、返回 void，这就是标准入口形式之一","16":"方法体左括号，程序运行时从这里开始执行","17":["打开 Windows 视觉样式，让按钮、输入框按当前系统主题绘制","不调这句控件会退回 Win95 风格的灰色方框。它必须在创建任何窗口之前调用，否则第一个窗体已经按旧样式画好了"],"18":["把控件默认文本渲染设为 GDI（false 是推荐值），而不是 GDI+","true 会用 GDI+ 画文字，字距与大小跟 .NET 1.x 兼容；false 用 GDI，与现代 Win32 程序一致、更清晰。这行同样必须在创建第一个窗口之前调用，而且一个进程只能设一次"],"19":["创建 Form1 并启动消息循环；程序会一直阻塞在这里，直到主窗体关闭","Run 内部就是经典的取消息、翻译、分发循环：没有它，窗体一显示就立刻消失。它返回之后 Main 才继续往下走——本例 Main 后面没有代码，所以 Run 返回即进程结束"],"20":"方法体右括号，闭合 Main","21":"类体右括号，闭合 Program 类","22":"命名空间右括号，闭合 ABB_Digital_Twin"},"class1":{"1":"引入 System 基础命名空间；这个类是空的，用不到其中任何类型","2":"集合命名空间，同样没用；VS 新建类时模板固定带这 5 行","3":"LINQ 命名空间，本文件没有任何查询，纯冗余","4":"System.Text 命名空间，模板默认带，这里没用到 StringBuilder 之类","5":"Task 异步命名空间，纯冗余","6":"","7":"命名空间声明，与 Program.cs、Form1.cs 共用同一个 ABB_Digital_Twin","8":"命名空间左括号，第 12 行闭合它","9":["声明一个 internal 的空类 Class1，没有任何字段、方法或构造函数","internal 表示只在本程序集可见；类名 Class1 是 VS 新建类时的默认名，说明这个文件从创建起就没被改过内容。它仍会被编进 exe 的程序集元数据（多一个类型条目），但因为没有字段也没有静态构造函数，运行时几乎不产生开销"],"10":"类体左括号，里面什么都没有","11":"类体右括号，闭合 Class1——这个类从头到尾是空的","12":"命名空间右括号，闭合 ABB_Digital_Twin"},"pose":{"1":"引入 System 基础命名空间；模板自带，本文件并不直接用到其中类型","2":"集合命名空间，模板自带；本类只有 14 个自动属性，没有集合","3":"LINQ 命名空间，模板自带，本文件没有查询语句","4":"System.Text 命名空间，模板自带，本文件没有字符串处理工具","5":"Task 异步命名空间，模板自带，纯数据类没有异步代码","6":"","7":"命名空间声明，与 Form1、Reader、Program 同属 ABB_Digital_Twin","8":"命名空间左括号，第 29 行闭合它","9":["声明 public 的数据传输类，纯数据、没有任何方法","public 而不是 internal：它要作为 out 参数的类型在 Reader 与 Form1 之间传递，同程序集内 internal 也够用，但 DTO 的定位是对外暴露的数据契约，写 public 更合惯例，将来把数据层拆成独立类库也不用改"],"10":"类体左括号，下面 14 个自动属性都装在这里","11":["自动属性 J1：编译器在后台替你生成一个私有字段加一对 get/set","写 get; set; 时编译器自动生成隐藏的后备字段（名字在源码里不可见），get 返回它、set 写它；对外是属性、对内仍是字段，调试器和序列化框架都认得。若写 get; private set;，外部只能读、只有本类能写，适合只由内部逻辑决定的值；若写 get; 并在构造函数里赋值，才是真正只读（C# 6 起）。本类 14 个属性全是公开可读可写的哑属性，任何引用方都能改"],"12":"自动属性 J2，第 2 轴关节角，double 容器装 PCSDK 的 float 值","13":"自动属性 J3，第 3 轴关节角","14":"自动属性 J4，第 4 轴关节角","15":"自动属性 J5，第 5 轴关节角","16":"自动属性 J6，第 6 轴关节角；Form1 用两位小数显示这六个值","17":"","18":"自动属性 TcpX，TCP 在世界坐标系下的 X 坐标，单位 mm","19":"自动属性 TcpY，TCP 的 Y 坐标，单位 mm","20":"自动属性 TcpZ，TCP 的 Z 坐标；这三个值从未被任何代码读取","21":"","22":["自动属性 Q1，四元数的标量部分 w，不是 x 分量","PCSDK 的 Orient 内部字段是 _q1.._q4，其中 Q1 对应 w、Q2/Q3/Q4 对应 x/y/z。这与 .NET System.Numerics.Quaternion(x,y,z,w) 的构造顺序相反，直接按 Q1,Q2,Q3,Q4 的顺序去构造会得到错误姿态（换成其它数学库时的具体表现未验证）"],"23":"自动属性 Q2，四元数向量部分的 x 分量","24":"自动属性 Q3，四元数向量部分的 y 分量；同样只赋值不读取","25":"自动属性 Q4，四元数向量部分的 z 分量","26":"","27":["自动属性 MechanicalUnitName，当前活动机械单元的名字","string 是引用类型，未赋值时默认就是 null，不像 double 会自动变成 0.0；本类每次读取都 new 一个新对象再由 Reader 立即赋值，实际不会为 null，但类型上允许，读之前判空更稳"],"28":"类体右括号，闭合 AbbRobotPoseData，14 个属性到此结束","29":"命名空间右括号，闭合 ABB_Digital_Twin"},"reader":{"1":"引入 System 命名空间，Exception、String 这些基础类型就不用写全名","2":"引入泛型集合命名空间，本文件其实没有用到 List 或 Dictionary","3":"引入 LINQ，本文件同样没用到，是新建类时的模板残留","4":"引入 System.Text，处理字符串编码用，本文件未直接使用","5":"引入 Task 相关命名空间，异步编程用，本文件未用到","6":"引入 PCSDK 核心域，Controller 这个最重要的类型就住在这里","7":"引入运动域，MechanicalUnit、JointTarget 等类型都在这里","8":"引入 RAPID 域，RobJoint、RobTarget、Orient 都归它管","9":"","10":"命名空间声明，本程序所有类都装在 ABB_Digital_Twin 这个筐里","11":"命名空间左括号，里面的类型对外全名是 ABB_Digital_Twin 加类名","12":"公开类 AbbRobotPoseReader，只干一件事：把控制器姿态读成纯数据","13":"类体左括号，往下到第 72 行都是这个类的成员","14":["公开方法：收一个已连接的 Controller，吐出姿态数据和一句提示语","三个细节：controller 是输入；poseData 与 message 是 out，被调方必须在每条返回路径上先赋值，调用方反而可以传未初始化的变量；返回 bool 而不抛异常，是因为\"没连接\"\"没激活单元\"这类读取失败属于预期内常态，不想让 UI 层到处写 try/catch。"],"15":"方法体左括号","16":["先把 out 参数置 null，满足编译器\"返回前必须赋值\"的要求","out 与 ref 的区别就在这里：编译器要求方法在 return 之前给两个 out 参数各赋值一次，漏一条路径就编译不过。先置 null 还有语义作用：任何一条失败路径返回后调用方拿到的 poseData 一定是 null，不会残留旧引用；Form1 里 poseData 是未初始化的局部变量，若这行不赋值，后面根本读不了。"],"17":"把提示语清空成空串，失败时调用方拿到的就是干净的空字符串","18":"","19":"开始 try 块，把下面所有 PCSDK 调用都圈进异常保护区","20":"try 块左括号","21":"先查控制器是否为空，防止用户没连接就点读取导致空引用崩溃","22":"if 块左括号","23":"给一句人能看懂的失败原因，稍后会由调用方弹到 MessageBox 上","24":"提前返回 false；注意此时 poseData 仍是第 16 行给的 null","25":"闭合第 21 行的 if 块","26":"","27":"注释：说明下一行取的是\"当前激活\"的那一个机械单元","28":["向运动系统要当前激活的机械单元，一次控制器往返就发生在这行","PCSDK 里 MotionSystem 有两个入口：ActiveMechanicalUnit 只返回控制器上当前激活的那一台（RobotStudio 里选中谁就是谁），带外轴或双机系统时其它机械单元它完全看不到，要遍历得用 MechanicalUnits 集合，本程序没写。反编译显示这个属性每次都读一次 InternalController.Motion.ActiveMech 做缓存比对，所以每访问一次都可能触发一次控制器往返，不适合放在高频循环里反复问。"],"29":"","30":"再查一次 null：控制器在线但没有激活机械单元时会返回 null","31":"if 块左括号","32":"提示没有活动机械单元，通常是控制器还在启动或没加载系统","33":"返回 false，poseData 依旧保持 null","34":"闭合第 30 行的 if 块","35":"","36":"注释：接下来读六个关节轴的角度","37":["取回一个 JointTarget，里面同时装着机器人六轴和外轴的角度","反编译看无参版 GetPosition 是按单元类型分流的：类型为 TcpRobot 时把关节值塞进 RobAx、ExtAx 给 Empty；若是外轴或变位机（MultiAxes、SingleAxis），则反过来把值全塞进 ExtAx，RobAx 直接给 RobJoint.Empty 也就是全 0，而且不抛异常。所以这行在带外轴的站上会\"成功返回一堆 0\"。"],"38":["只取机器人本体那半边的关节角，外轴那半边 ExtAx 被直接丢掉","这就是上一行那个坑的落点：代码只认 RobAx，从不看 ExtAx，而第 37 行的分流逻辑恰恰可能在 RobAx 里放全 0。结果 J1~J6 静默显示 0.0000，readOk 却仍是 true，界面上没有任何错误提示，比\"读取失败\"难查得多。要补的话可以判断 ExtAx 是否非零，或在单元类型不是 TcpRobot 时直接给出提示。"],"39":"","40":"注释：下一行读笛卡尔位姿，World 表示世界坐标系","41":["取 TCP 在指定坐标系下的位姿，这里选择了世界坐标系","CoordinateSystemType 是 PCSDK 的坐标系枚举，常用的还有 Base 基座系、Tool 工具系、WorkObject 工件系等。这条重载底层走 Motion.GetCartesianPosition 这个 RPC，只对 TcpRobot 型单元有效，其它类型会返回错误并被包成异常抛出。因为它和第 37 行挤在同一个 try 里、且在后，一旦抛异常，明明已经读到的关节角也随整次调用一起被判失败。"],"42":"","43":"两次读取都成功了才创建 DTO，失败路径上不必浪费这次分配","44":"","45":"把单元名也存进 DTO，不过全程序没人读它，属于预留字段","46":"","47":"J1 赋值：Rax_1 是 float，赋给 double 属性会自动加宽不报错","48":"J2 同上；关节角单位是度，和示教器上看到的数字一致","49":"J3 同上，把 Rax_3 搬到 poseData.J3","50":"J4 同上","51":"J5 同上","52":"J6 同上；六轴写到这里结束，这是界面唯一真正用到的数据","53":"","54":"TCP 的 X，取自 RobTarget.Trans（Pos 结构），单位是毫米","55":"TCP 的 Y，同样来自 Trans，单位也是毫米","56":"TCP 的 Z，毫米；ABB 世界系里 Z 轴朝上，是右手系","57":"","58":["Q1 是四元数的标量部分 w，不是 x，顺序和 .NET 正好相反","ABB 的 Orient 把四个分量存成 _q1.._q4，其中 Q1 对应 w、Q2/Q3/Q4 对应 x/y/z；而 .NET System.Numerics.Quaternion 的构造函数顺序是 (x, y, z, w)。所以将来拿这四个数去构四元数必须写成 new Quaternion(Q2, Q3, Q4, Q1)，写反了姿态会整个错掉。另外 Orient 自带 ToEulerAngles(out x, out y, out z)，以后要显示欧拉角直接调它，不用自己推公式。"],"59":"Q2 是四元数的 x 分量，别把它当成第二个标量","60":"Q3 是四元数的 y 分量","61":"Q4 是四元数的 z 分量；四个数一起才确定一个完整姿态","62":"","63":"成功提示语；但调用方只在失败时弹窗，这条成功串目前没人显示","64":"返回 true，告诉调用方 poseData 有效、可以放心取字段了","65":"闭合第 19 行的 try 块","66":"兜住上面所有 PCSDK 调用可能抛出的异常，一口全部吃掉","67":"catch 块左括号","68":["失败提示只拼了 ex.Message，异常类型和内部异常全被丢掉","PCSDK 内部习惯把底层 RPC 异常再包一层（ExceptionManager.Create 带 ex.InnerException），所以这里拿到的 ex.Message 往往只剩一句外壳文字，真正的原因——HResult、服务端返回码、对方给的原话——全在 InnerException 里，被这行丢了。排查\"为什么连不上\"时通常要看 ex.ToString() 或把 InnerException 也拼进 message，才能看到上下文。"],"69":"返回 false；此时 poseData 一定是 null，调用方不能解引用","70":"闭合第 66 行的 catch 块","71":"闭合 ReadRobotPose 方法","72":"闭合 AbbRobotPoseReader 类","73":"","74":"闭合命名空间 ABB_Digital_Twin，文件到此结束"},"conn":{"1":"引入 System 命名空间，Exception、String 这些最常用的类型都在这里","2":"引入泛型集合命名空间，本文件要用的 List<T> 就定义在这里","3":"引入 LINQ 扩展方法命名空间；本文件其实没用到，是模板默认带来的","4":"引入文本与编码命名空间，StringBuilder 之类住在这里，本文件未使用","5":"引入异步任务命名空间，本文件没有任何 async 代码，属模板残留","6":"引入控制器根命名空间，Controller、ControllerFactory 都在这里","7":"引入发现命名空间，扫描用的 NetworkScanner 住在这里","8":"","9":"命名空间声明，本项目所有类都放在 ABB_Digital_Twin 下，互相调用不用写全名","10":"命名空间的左括号，从这里开始里面的名字都归 ABB_Digital_Twin 管","11":"设备层类，internal 表示只在本次编译出的程序集里可见；它只干扫描、连接、断开三件事","12":"类体的左括号，下面所有字段和方法都是这个类的成员","13":"注释：说明下面这个字段存的是当前已连接的控制器对象","14":["存当前连接，null 表示还没连上任何控制器","Controller 才是能真正发 RPC 的连接对象：内部持有网络适配器、事件订阅和当前登录用户；ControllerInfo 只是扫描时拿到的一张名片（IP、系统名、版本、是否虚拟），拿着它读不了位姿。写 = null 只是把意图写明，C# 引用类型字段不显式赋值也是 null。"],"15":"","16":"注释：说明下面这个字段存的是扫描结果，也就是一串「名片」","17":"扫描结果缓存，元素是名片；SDK 给的是 ControllerInfoCollection","18":"","19":"注释：说明这个属性是给外部（读位姿那部分）取连接对象用的","20":"只读属性声明，类型是 Controller，公开给 Form1 读取","21":"属性体的左括号","22":"只写 get，外部只能读不能替换引用，避免绕过 Disconnect 换对象","23":"闭合 CurrentController 属性","24":"","25":"注释：说明这个属性的作用是告诉外部扫描到了几台","26":"只读属性，返回扫描缓存里的元素个数","27":"属性体的左括号","28":"每次访问实时算 Count，不缓存；button2_Click 用它判断要不要先扫","29":"闭合 ControllerCount 属性","30":"","31":"注释：一句话说明本方法的职责是扫描控制器","32":"扫描并把结果写进 controllerList，成败用返回值报，提示语走 out 参数","33":"方法体的左括号","34":"开始保护段：扫描要碰网络，随时可能抛异常","35":"try 块的左括号","36":"先清空上次结果，防止连点两次扫描后列表翻倍","37":"","38":"原作者注释，点明这行调用的是 ABB PC SDK 提供的搜索能力","39":"创建扫描器对象，构造函数只挂上 PCSDK 内部的 netscan 单例","40":"","41":"注释：说明下一行才是真正开始扫描","42":["真正干活的一行：同步、阻塞地做局域网广播发现","反编译可见 Scan() 内部是 Internal.NetworkScanner.Instance.GetControllers() 再拷进 _controllers，全程同步，通常要几秒（网段大、广播被防火墙丢包时更久）。它被 Form1.button1_Click 直接在 UI 线程上调用，所以扫描期间窗口就是「未响应」。正确做法是丢进 Task.Run，扫完再回 UI 线程刷控件。"],"43":"原作者注释：把 SDK 的集合转存成自己定义的集合","44":["取回扫描结果，类型是 PCSDK 的 ControllerInfoCollection","它不是 List<ControllerInfo>（而是 EnumerableTCollectionBase<ControllerInfo> 的子类），能 foreach、能按索引取、也有自己的 Add，但没有 List 那套 AddRange(IEnumerable<T>)、RemoveAll，也不能直接赋给 List<ControllerInfo> 变量。"],"45":"","46":"逐个遍历 SDK 返回的名片对象，变量名 info 提示它是信息而非连接","47":"循环体的左括号","48":"把名片原样搬一份进自己的 List；ControllerInfo 是引用类型，没有深拷贝","49":"闭合 foreach 循环","50":"","51":"扫完还是空的，就判定为没找到控制器","52":"if 块的左括号","53":"给调用方一句中文失败原因，Form1 会原样弹进 MessageBox","54":"明确返回失败，同时 message 已赋值，满足 out 参数的规则","55":"闭合 if 块","56":"","57":"成功路径拼提示，数字用加号与字符串拼接会自动转成文本","58":"返回成功，controllerList 里已存好结果供后续连接使用","59":"闭合 try 块","60":"兜住扫描期间的所有异常，注意这里用的是宽泛的 Exception","61":"catch 块的左括号","62":"只把 ex.Message 拼进提示，丢了堆栈和 InnerException 里的真原因","63":"返回失败；此时列表已被第 36 行清空，不会留下半截脏数据","64":"闭合 catch 块","65":"闭合 ScanControllers 方法","66":"","67":"注释：说明本方法的产出是给界面看的文本","68":"返回一组字符串，每个元素就是 ListBox 里的一行，UI 层自己决定怎么用","69":"方法体的左括号","70":"准备收集结果的列表，后面所有文本都往这里塞","71":"","72":"没扫描过、或上次扫描失败时走这条分支","73":"if 块的左括号","74":"第一行提示语，措辞与 ScanControllers 的失败提示保持一致","75":"第二行给排查方向，因为广播发现只在同一网段有效","76":"提前返回这两行；此时既没有分隔线也没有空行，布局与正常情况不同","77":"闭合 if 块","78":"","79":"给人看的序号从 1 开始，它只用于显示，不是控制器索引","80":"","81":"逐台控制器生成显示文本","82":"循环体的左括号","83":"第 1 行：分隔线加序号，视觉上把每台控制器的信息分开","84":"第 2 行：控制器 IP，类型是 System.Net.IPAddress","85":"第 3 行：系统名，即控制器里那个 RobotWare 系统的名字","86":"第 4 行：RobotWare 版本，类型是 System.Version 而不是字符串","87":"第 5 行：控制器名；它和系统名是两个不同字段，别混为一谈","88":"第 6 行：是否虚拟控制器，bool 显示成 True/False","89":["第 7 行：插入一个空字符串当视觉间隔","坑在两点：①每台控制器占 7 个 ListBox 条目而不是 1 个，所以 listBox1.SelectedIndex 要除以 7 才是控制器索引；②空字符串也是合法条目、能被鼠标选中，落在空条目上除法还会算错。当前靠 ConnectFirstController 固定连第 0 台，隐患未暴露；一旦改成「选哪台连哪台」就得重做映射。"],"90":"","91":"序号自增，进入下一台控制器","92":"闭合 foreach 循环","93":"","94":"把文本交给调用方，button1_Click 再逐行 Add 进 ListBox","95":"闭合 GetControllerDisplayLines 方法","96":"","97":"注释：说明这是个「默认连第一台」的便捷入口","98":"薄包装方法；签名里也带 out，好让调用方保持同一套写法","99":"方法体的左括号","100":"一行转调真正的实现，索引写死 0；将来改连接策略只动这里","101":"闭合 ConnectFirstController 方法","102":"","103":"注释：说明本方法可以按序号挑控制器","104":"真正的连接实现，index 必须是 controllerList 的合法下标","105":"方法体的左括号","106":"开始保护段：建对象和登录都可能抛异常","107":"try 块的左括号","108":"第一道防御：还没扫描过就想连","109":"if 块的左括号","110":"提示用户先扫描，措辞里已经给出了下一步该做的动作","111":"直接失败返回，不往下走","112":"闭合第一道防御","113":"","114":"第二道防御：负数和越界一起挡掉，注意上界用 >= 而不是 >","115":"if 块的左括号","116":"提示序号无效；没说合法范围是多少，对用户不够友好","117":"失败返回；两道防御都在 try 内，但它们自身不抛异常","118":"闭合第二道防御","119":"","120":"取出这张名片，后面建连接、拼提示都要用到它","121":"","122":"原作者注释：点明下一步是先清理旧状态","123":"连新的之前先断开旧的：旧对象泄漏连接，还占着 mastership","124":"","125":"注释：说明下面要造出真正的连接对象","126":["把名片变成可通信的 Controller 对象，按系统号定位控制器","反编译可见 CreateFrom(info) 只是 new Controller(FormatControllerId(info.SystemId))——这一步不联网，真正的网络动作在后面 Logon 和每次 GetPosition。也正因为「建对象不会报错」，绝不能拿这行当连接成功的判据。"],"127":"","128":"注释：说明下一行才是真正的权限与网络动作","129":["用匿名用户登录，登录成功才算真正连上","UserInfo.DefaultUser 是不带用户名密码的默认匿名用户。Logon 内部 lock(this) 后走 LogonOperation，会真的与控制器握手；控制器同一时刻只给一个用户 mastership，示教器或其他客户端占着时这里会抛异常。所以「连接成功」实质只是「登录成功」，能不能读位姿还要看后面的 GetPosition。"],"130":"","131":"开始用加号拼接多行成功提示；字符串里的反斜杠 n 会被 MessageBox 渲染成换行","132":"第一行：结论，末尾的反斜杠 n 换行，后面的加号表示还有下一段","133":"第二行：控制器名，取自名片，而不是登录后从控制器现查","134":"第三行：系统名，出问题时用来确认到底连的是哪个系统","135":"第四行：IP，最后一段不再接换行符","136":"","137":"返回成功，此时 controller 已就绪，Form1 可以开始定时读位姿","138":"闭合 try 块","139":"兜住建连 / 登录期间的所有异常","140":"catch 块的左括号","141":"同样只取外层 Message，丢了内层原因（与第 62 行一个毛病）","142":"","143":"失败时可能已经建出对象却没登录成功，得把它清理掉","144":"if 块的左括号","145":["显式销毁半成品对象，释放它持有的底层连接与事件订阅","不 Dispose 只置 null，对象要等 GC 才回收，而 PCSDK 的 Controller 持有非托管资源（SDKBase / Adapter 的 Dispose(bool) 链负责收），GC 收不到就等于把连接和登录态一直挂着。这是 IDisposable 类型的基本原则：能 Dispose 就别等 GC。"],"146":"再把字段置 null，让 CurrentController 回到未连接状态","147":"闭合 if 块","148":"","149":"失败返回；Form1.button2_Click 照样会把 message 弹出来","150":"闭合 catch 块","151":"闭合 ConnectControllerByIndex 方法","152":"","153":"注释：说明本方法负责清理连接","154":"返回 void：断开对调用方没有成功 / 失败可言，尽力而为即可","155":"方法体的左括号","156":"幂等判断：没连过就什么都不做，所以本方法被重复调用也不会炸","157":"if 块的左括号","158":"开始保护段：Logoff 要和控制器通信，控制器已关机或断网时会抛","159":"try 块的左括号","160":"先退出登录让出 mastership，再 Dispose 销毁对象，这个顺序不能反","161":"再销毁对象，释放底层连接与事件订阅；两行都成功才算正常路径","162":"闭合 try 块","163":"不带变量的空 catch：不关心异常内容，只要别让关窗时弹框","164":"catch 块的左括号","165":"原作者注释：说明这里的吞异常是有意为之","166":"闭合 catch 块","167":"finally 无论成败都会执行，是这里最关键的结构","168":"finally 块的左括号","169":["必须放在 finally：哪怕 Logoff 抛异常，状态也要回到未连接","如果这行写在 try 末尾，Logoff 一抛就跳过它，字段会留着一个已 Dispose 或半死的对象，CurrentController 就谎报「还连着」，AbbRobotPoseReader 拿它去 GetPosition 只会连环失败。空 catch 的取舍：关程序时再弹错误框只会烦人，代价是把失败信息彻底丢了——至少该 Debug.WriteLine 一行。"],"170":"闭合 finally 块","171":"闭合外层 if (controller != null) 块","172":"闭合 DisconnectController 方法","173":"","174":"闭合 AbbControllerConnection 类","175":"闭合 ABB_Digital_Twin 命名空间，文件到此结束"},"form":{"1":"引入 .NET 基础命名空间，`EventArgs` 这类类型都从这里来","2":"引入泛型集合命名空间，第 62 行的 `List<string>` 靠它","3":"引入组件模型命名空间，本文件没直接用到，是模板残留","4":"引入 ADO.NET 数据命名空间，本程序不碰数据库，纯属模板自带","5":"引入绘图命名空间（颜色、字体、坐标），Form1.cs 里没用，只有 Designer 用","6":"引入 LINQ 扩展方法，本文件没有查询表达式，属于没用上的 using","7":"引入文本处理命名空间，本文件不用 `StringBuilder`，也是模板自带","8":"引入任务并行库，本程序全同步、不用 async/await，这行是废的","9":"引入 WinForms 命名空间，`Form`、`MessageBox` 都住在这里","10":"","11":"","12":"把下面的类型装进 `ABB_Digital_Twin` 名字空间，和下两层同属一窝","13":"命名空间左括号，这里面的名字都归 `ABB_Digital_Twin` 管","14":["声明窗体类；`partial` 说明它只是这个类的一半","编译时编译器把本文件和 `Form1.Designer.cs` 里的另一个 `partial class Form1` 合成一个完整类：本文件写逻辑，Designer 写控件长什么样，两半私有成员互见——所以这里能直接写 `txtJ1.Text`。`: Form` 表示继承 WinForms 窗体基类，窗口边框、消息循环、`Controls` 集合全是白拿的。"],"15":"类体左括号，从这里到第 199 行都是 Form1 的成员","16":["设备层对象的字段；没写修饰符，类成员默认 `private`","这里是组合（has-a）而不是继承：Form1 完全不懂 ABB 的 RPC 协议，只把活派给 `AbbControllerConnection`，后者才持有真正的 `Controller` 对象。UI 层因此只承担调度职责，将来换底层实现时这一行是唯一的改动点。"],"17":"数据层对象的字段，负责把 Controller 里的读数摊平成 DTO","18":["WinForms 版定时器；它的 `Tick` 在 UI 线程上执行","特意写全名 `System.Windows.Forms.Timer`，是为了和另外两个同名类划清界限：`System.Threading.Timer` 的回调跑在线程池线程上，在里面改 `txtJ1.Text` 必抛跨线程访问异常；`System.Timers.Timer` 默认也在池线程。WinForms 版靠窗口消息 WM_TIMER 驱动，回调天然在 UI 线程，不需要 `Invoke`。"],"19":"构造函数，`new Form1()` 时最先执行，此时控件刚被创建","20":"构造函数体的左括号，里面的顺序就是初始化的顺序","21":"调设计器生成的方法，把按钮、文本框、菜单一次造出来并摆好位置","22":"注释：下面设置定时器的刷新周期","23":"注释：500 表示每 500 毫秒读一次，即每秒读 2 次","24":"注释：初期用 500，稳定后可以改 200","25":["把刷新间隔设为 500 毫秒，也就是每秒读 2 次","`Interval` 的单位是毫秒，含义是『两次 Tick 之间至少隔多久』的精度上限，不是精确周期：单次读取耗时超过 500ms 时实际周期就被拉长。ABB 现场（尤其 RobotStudio 的虚拟控制器或跨网段）单次 `GetPosition` 可能有几十毫秒往返，所以注释里建议先 500 再降到 200 是有依据的。"],"26":"","27":"注释：下面把定时器事件挂到处理方法上","28":"注释：每次到点就自动执行 `PoseTimer_Tick`","29":"用 `+=` 把处理方法挂到 `Tick` 事件上——委托机制，只是登记不执行","30":"","31":"注释：关闭窗口时停表并断开控制器","32":["订阅窗体关闭事件，本意是关窗时收拾现场","坑：`Form1.Designer.cs` 第 367 行也写了同样的订阅，而 `InitializeComponent()` 在本方法第一行就跑过了，于是处理方法被挂了两次、关闭时连跑两遍。没爆是因为它幂等：`poseTimer.Stop()` 重复无害，`DisconnectController()` 第一次跑完就把 `controller` 置 null，第二次直接跳过。"],"33":"构造函数体右括号；控件齐了、定时器接好了，但还没启动","34":"XML 注释：说明下面是定时器触发的事件处理","35":"XML 注释续：只要 `poseTimer.Start()` 启动了定时器","36":"XML 注释续：这个方法就按 `Interval` 毫秒反复执行","37":"XML 注释续，补一句说明这是自动执行的","38":"XML 注释块结束，下面才是真正的方法声明","39":"Tick 的标准签名：`sender` 是定时器本身，`e` 是空的事件参数","40":"方法体左括号，Tick 的全部逻辑从这里开始","41":"注释：这一行就是『定时读取机器人姿态』","42":["调核心方法读一次姿态；传 `false` 表示这里先不弹窗","传 `false` 的用意：让 `UpdateRobotPoseDisplay` 只回答成不成、不自作主张弹框，由本方法统一决定怎么提示。代价是 `poseReader` 给出的那句具体原因（比如『请先连接 ABB 控制器』）被丢掉了，用户只看到第 50 行那句笼统提示，排障时信息更少。"],"43":"","44":"注释：失败可能是控制器断开、未连接、RobotStudio 已关闭","45":"读取失败就进这个分支，成功则什么都不做","46":"if 体的左括号，失败处理都在里面","47":"注释：先停表，免得每 500ms 重复报一次错","48":"先 `poseTimer.Stop()` 掐掉轮询，这样后面弹框期间不会再来一次读取","49":"","50":["在 Tick 里弹模态对话框报错——典型的『用弹窗做错误通道』","`MessageBox.Show` 是模态的，它自己跑一个消息循环，把主窗口冻结到用户点确定为止；现场无人在电脑前时，程序就一直停在这一个框上，读数不再更新、界面动不了，而且这个框没有自动重连或重试的出口。想恢复只能手动点『开始实时读取』——如果控制器还是断的，就再弹一次。好在第 48 行已经先 Stop，不会自己叠出第二层框。正确的错误通道是状态栏文字或日志，只在用户主动点击时才弹框。"],"51":"if 体右括号，失败处理到此结束","52":"`PoseTimer_Tick` 方法体右括号","53":"","54":"『扫描控制器』按钮的处理方法，Designer 第 76 行接线","55":"扫描按钮处理方法体的左括号","56":"先清空列表，免得上次扫描的结果和这次的混在一起","57":"","58":"声明一个字符串变量，稍后当 `out` 实参接住下层给的提示文字","59":"","60":["调设备层扫描控制器，`out message` 带回结果文字","`ScanControllers` 内部是 `new NetworkScanner()` 加 `scanner.Scan()`，走局域网广播发现，同步阻塞，通常要数秒。它跑在 UI 线程上，所以这几秒里窗口完全不重绘、按钮也点不动，这就是『界面假死』。正规写法是 `Task.Run` 加 `async/await`，扫完再回 UI 线程填列表。"],"61":"","62":"无论成败都先把扫描结果取成一组要显示的文本行","63":"","64":"逐行遍历这组文本，一行显示成一个列表条目","65":"foreach 体左括号","66":"一行塞进 ListBox；`Items` 是对象集合，字符串直接当条目","67":"foreach 体右括号","68":"","69":"只有扫描失败才进这个分支","70":"if 体左括号，弹框动作在里面","71":"弹出下层给的失败原因，比如『扫描失败：……』","72":"if 体右括号，扫描流程收尾","73":"`button1_Click` 方法体右括号","74":"","75":"『连接控制器』按钮的处理方法，Designer 第 99 行接线","76":"连接按钮处理方法体的左括号","77":"为 `out` 实参准备的变量；这一行不赋值，编译器也不抱怨","78":"","79":"列表里一台控制器都没有（没扫过，或上次一台没扫到）","80":"if 体左括号，里面先补扫再连接","81":"那就先自动扫一次，省得用户还得回头点『扫描』","82":"","83":"补扫也失败，说明网络里真没找到控制柜","84":"if 体左括号，扫描失败的处理","85":"把补扫失败的原因弹给用户看","86":"立刻返回，不再往下走连接逻辑","87":"if 体右括号，补扫流程结束","88":"外层 if 体右括号","89":"","90":["连接控制器——固定连第 0 台，完全无视用户选中了哪一台","`ConnectFirstController()` 内部就是 `ConnectControllerByIndex(0, ...)`，`listBox1.SelectedIndex` 一次没被读过，所以选中第 2 台再点连接，连上的仍是第 1 台。Connection 里已有按序号连接的方法，把实参换成 `SelectedIndex` 就能修好。"],"91":"","92":"不管成功还是失败都弹框：成功弹一大段控制器信息，失败弹原因","93":"`button2_Click` 方法体右括号","94":"","95":"窗体关闭事件的处理方法（前面说过，它被订阅了两次）","96":"关闭处理方法体的左括号","97":"注释：关窗之前先停表","98":"注释：免得正在关程序时 Timer 还在读机器人数据","99":"先停轮询，断掉 500ms 的读，免得 Dispose 中途再发起 SDK 调用","100":"","101":"注释：断开连接、释放资源","102":"再 `Logoff` + `Dispose` 掉 Controller，自带兜底","103":"`Form1_FormClosing` 方法体右括号","104":"","105":"『读取六轴姿态』按钮的处理方法，Designer 第 111 行接线","106":"读取按钮处理方法体的左括号","107":"单次读取；传 `true`，失败时就会直接弹框把原因告诉用户","108":"`button3_Click` 方法体右括号","109":"XML 注释：说明本方法读六轴并写进 `txtJ1`~`txtJ6`","110":"XML 注释续：一句话说明这个方法干什么","111":"XML 注释块结束，参数说明开始","112":"XML 注释：参数 `showErrorMessage` 的含义","113":"XML 注释续：是否显示错误弹窗","114":"XML 注释续：手动点按钮时可以显示错误","115":"XML 注释续：Timer 刷新时也建议弹一次再停表","116":"XML 注释续，讲清楚什么时候该弹窗","117":"XML 注释块结束，下面是返回值说明","118":"XML 注释续：true 表示读取成功，false 表示失败","119":"XML 注释块结束，方法签名在下一行","120":"核心方法签名：收一个『要不要弹错误框』的开关，返回读取成败","121":"核心方法体的左括号，全部逻辑都在这一块里","122":"注释：用来装读到的姿态数据","123":["只声明不赋值——因为它接下来要当 `out` 实参","C# 语言保证：只要被调方正常返回，就一定给 `out` 参数赋过值，所以这里不初始化也不报『使用了未赋值的变量』。真赋值在 Reader 第 16 行（置 null）和第 43 行（new DTO）；万一走异常分支，`poseData` 会是 null，但那时 `readOk` 为 false，第 149 行不会执行，不会空引用。"],"124":"","125":"注释：用来装提示文字","126":"同上，只声明；值由 `out` 参数带回来","127":"","128":"注释：调数据层，从当前连接的控制器读 J1~J6","129":["把设备层拿到的 Controller 喂给数据层，两个 `out` 参数带回数据与提示","这一行是两个分层的接缝：`abbService.CurrentController` 是 Connection 对外暴露的唯一 ABB 对象，`ReadRobotPose(...)` 只要一个 `Controller` 就能干活，于是『怎么连』和『怎么读』彻底解耦。未连接时为 null，Reader 第 21 行判空并回『请先连接 ABB 控制器』。"],"130":"第一个实参：当前的 Controller 对象，未连接时为 null","131":"`out poseData`：被调方 new 一个 DTO 塞回来","132":"`out message`：失败时这里装着给人看的中文原因","133":"多行调用的收尾右括号加行末分号","134":"","135":"注释：下面是读取失败的分支","136":"读失败就进这个分支，成功则跳过去","137":"if 体左括号，失败处理开始","138":"注释：只有允许弹窗的时候才弹","139":"开关为 `true` 时才弹——『显示策略』和『读取逻辑』分开的唯一体现","140":"if 体左括号，真正弹框的语句","141":"弹出下层给的具体原因","142":"内层 if 体右括号","143":"","144":"返回 false，告诉调用方这次没读到","145":"外层 if 体右括号","146":"","147":"注释：把读到的六轴角度写进 TextBox","148":"注释：`F2` 表示保留两位小数","149":["把 J1 格式化成两位小数写进文本框，其余五轴一模一样","`ToString(\"F2\")` 是定点格式：小数点后固定两位、整数部分不限，所以 1234.5 会写成 `1234.50`——它**不是**『两位有效数字』（那是 `G2`）。小数点符号跟着当前 `CultureInfo` 走，某些区域设置下写成 `1234,50`，导出或再解析时要留意。`J1` 源头是 `RobJoint` 的 `float`，精度上限仍是约 7 位有效数字。"],"150":"J2 落屏，格式和上一行完全一致","151":"J3 落屏，和前两行同一个模板","152":"J4 落屏，格式保证一致","153":"J5 落屏，倒数第二个轴","154":["J6 落屏——界面显示通道到此为止","DTO 里其实有 14 个字段：`TcpX/TcpY/TcpZ`（mm）、`Q1~Q4`（Q1 是标量 w，顺序和 `System.Numerics.Quaternion` 相反）和 `MechanicalUnitName` 都赋了值却没人读。想让 TCP 上屏，在下面加三行 `poseData.TcpX.ToString(...)` 再在 Designer 补三个 TextBox。"],"155":"","156":"读到了也写完了，返回 true","157":"`UpdateRobotPoseDisplay` 方法体右括号","158":"","159":"窗体 `Load` 事件的处理方法，Designer 第 368 行还挂着它","160":"Load 处理方法体的左括号","161":"","162":"方法体右括号——空的：既不读数据也不初始化，挂着却没内容的残留","163":"","164":"『开始实时读取』按钮的处理方法，Designer 第 273 行接线","165":"开始按钮处理方法体的左括号","166":"注释：启动轮询之前先试读一次","167":"注释：第一次都读不到，就不要启动定时器","168":"先手动读一次并允许弹窗——这个顺序是对的：连不上就别启动轮询","169":"","170":"第一次试读就没读到，直接退出","171":"if 体左括号，失败就返回","172":"直接返回，定时器保持停着","173":"if 体右括号，成功才继续往下","174":"","175":"注释：下面启动定时器","176":"注释：启动后 Tick 会按设定间隔自动执行","177":"真正启动轮询；此后每 500ms 读一次","178":"","179":"再弹一句『已开始实时读取』——此时定时器其实已经在跑了","180":"`btnStartRealTime_Click` 方法体右括号","181":"","182":"『停止实时读取』按钮的处理方法，Designer 第 285 行接线","183":"停止按钮处理方法体的左括号","184":"注释：停表就是停止轮询","185":"停表；本来就在停的状态再停一次也无害","186":"","187":"弹一句已停止，纯提示；界面上的旧读数不会清空","188":"`btnStopRealTime_Click` 方法体右括号","189":"","190":"残留方法 `toolStripLabel1_Click`；Designer 里已无此控件","191":"孤儿方法体的左括号，里面什么都没有","192":"","193":"方法体右括号——空壳，且没有任何控件引用它，纯死代码","194":"","195":"菜单项『12231』的点击处理方法，Designer 第 323 行接线","196":"菜单处理方法体的左括号","197":"","198":"方法体右括号——点开菜单再点子项，什么都不会发生，调试残留","199":"类体右括号，闭合 `partial class Form1`","200":"命名空间右括号，闭合 `ABB_Digital_Twin`"},"designer":{"1":"命名空间声明开头，本项目的窗体代码都归 ABB_Digital_Twin 管","2":"命名空间左括号，Form1 的两半都在这个块里面","3":["声明 Form1 的其中一半，partial 表示这个类还有另一半","另一半在同目录的 Form1.cs 里，那边写着 : Form 继承基类。partial 的两半合起来才是一个完整类，基类只需在任意一处声明；设计师把这处留给手写那半，避免两处都写、改一处漏一处导致编译错误。"],"4":"类体左括号，下面依次是字段、Dispose 和 InitializeComponent","5":"三斜线注释开头，这种注释会被 IDE 收进字段的提示气泡里","6":"注释正文：说明下面这个字段是设计器自己必需、要用到的变量","7":"summary 注释的收尾标签","8":["声明 IComponent 容器字段并置 null，这是设计师的统一释放登记处","components 是硬约定名，改名会连带 this.components 的那些构造调用全崩。初值 null 表示还没建，等 InitializeComponent 第 31 行 new 出来才有值；Dispose 里先判空再释放，就是为了两种时序都不出错。"],"9":"","10":"给下面的 Dispose 方法写文档注释：清理所有正在使用的资源","11":"注释正文，一句话说明这个方法负责释放窗体持有的资源","12":"summary 注释的收尾标签，下面一行才是参数说明","13":"参数注释：disposing 为 true 释放托管资源，false 只处理非托管","14":"重写基类的 Dispose(bool)，这是 .NET 约定好的资源释放入口","15":"Dispose 方法体的左括号，真正的释放逻辑在下面几行","16":["两个条件同时成立才动手释放：disposing 为真，且组件容器存在","disposing=false 是终结器（GC）那条路径，那时碰托管对象会出问题；components!=null 防的是窗体根本没建成。顺序也固定：先释放自己的组件，再交回基类。"],"17":"if 块的左括号，两个条件都为真才进得来","18":"调用组件容器的 Dispose，把登记过的组件一次全清掉","19":"闭合 if 块，下一行的 base.Dispose 属于方法级","20":"把释放交回基类，这一句漏了控件句柄就不会真正销毁","21":"闭合 Dispose 方法","22":"","23":"#region 折叠标记，把这一大段设计器代码折成一栏便于阅读","24":"","25":"三斜线注释开头，声明 InitializeComponent 是设计器支持必需的","26":"注释正文：提醒不要用代码编辑器手改这个方法体","27":"注释补充：要改界面请回到窗体设计器里拖控件","28":"summary 注释的收尾标签","29":"声明 InitializeComponent，无参无返回，窗体构造时被调一次","30":"方法体左括号，30 个控件的创建、配置、接线全在这里","31":["先创建组件容器实例，赋给 components 字段——统一释放的登记处","IContainer 是 .NET 的组件容器接口，任何 IComponent（右键菜单、Timer 之类）都可以登记进去，像下面三行那样在构造时传入 this.components。窗体释放时只调一次 components.Dispose()，登记过的组件全被顺带带走，不必逐个写 Dispose。"],"32":["创建 ComponentResourceManager，负责按名字从 .resx 资源里取对象","本任务范围（1~208 行）内它一次都没被用到，真正的用途在文件末尾给窗体设图标那句 resources.GetObject(\"$this.Icon\")。设计师照模板总会生成这一行，手删掉会让那句编译不过；它本身不是可释放组件，所以不进 components。"],"33":"new 出「扫描控制器」按钮，此刻还是内存里的空壳","34":"new 出显示控制器列表的 ListBox","35":"new 出「连接控制器」按钮","36":"new 出「读取六轴姿态」按钮","37":"new 出显示「J1 :」的标签","38":"new 出放 J1 数值的文本框","39":"new 出放 J2 数值的文本框","40":"new 出显示「J2 :」的标签","41":"new 出 txtJ4，排在 txtJ3 前面，只反映拖控件的先后","42":"new 出显示「J4 :」的标签","43":"new 出放 J3 数值的文本框","44":"new 出显示「J3 :」的标签","45":"new 出放 J6 数值的文本框","46":"new 出显示「J6 :」的标签","47":"new 出放 J5 数值的文本框","48":"new 出显示「J5 :」的标签","49":"new 出 J1 行末尾的「度」单位标签，字段名 label7","50":"new 出 J2 行的「度」标签 label8","51":"new 出 J3 行的「度」标签 label9","52":"new 出 J4 行的「度」标签 label10","53":"new 出 J5 行的「度」标签 label11","54":"new 出 J6 行的「度」标签 label12","55":"new 出「开始实时读取」按钮，背后配一个 500ms 定时器","56":"new 出「停止实时读取」按钮，成对地管住那个定时器","57":"new 出右键菜单 contextMenuStrip1，登记进 components","58":"new 出右键菜单 contextMenuStrip2，同样登记进 components","59":"new 出右键菜单 contextMenuStrip3，同样登记进 components","60":"new 出顶部菜单条 MenuStrip","61":"new 出菜单条上的那一项，文本是 12231，调试时的占位","62":"new 出它的下拉子项，文本 12121，同样是占位","63":["先冻结 menuStrip2 的布局，紧接着冻结整个窗体","SuspendLayout 是布局开关：冻结期间设 Location/Size 只改字段，不触发重排重绘。顺序上先子后父，恢复时正好反过来。配对的是文件末尾的 ResumeLayout(false)+PerformLayout()，冻结几次就要恢复几次，少恢复一次界面就永远排不出正确布局。"],"64":"冻结窗体自身的布局，此后改坐标不会立刻触发重排和重绘","65":"段首分隔注释，紧跟着的下一行就是 button1 的名字","66":"段名注释，写的就是这个控件在设计师里的名字","67":"分隔注释的收尾行，空的 // 只是视觉分隔","68":["给按钮设字体：微软雅黑 9 点、常规、按 Point 计量、字符集 134","第 5 个参数 134 是 GDI 的字符集编号，0x86 对应的正是简体中文 GB2312；写成 0 或 128 系统就按别的字符集解析，中文可能变方块或乱码。9F 的 F 是 float 后缀，写成 9 会当 double 传，编译不过。"],"69":["Location 是控件左上角相对父容器（窗体）左上角的像素坐标，这里是 (12,219)","y=219 而右侧 button2 的 y=216，两个本该齐平的按钮差了 3 像素，肉眼能看出歪；x=12 也与下面那行 Margin 无关——Margin 影响设计器的对齐吸附与 AutoSize 换算，对写死 Location 的控件运行时不再加白边。"],"70":"外间距 3,4,3,4，是设计师按字体缩放算出来的对齐余量","71":"Name 设为 button1，它就是运行时 this.button1 那个字段的来源","72":"尺寸 165×52，比默认按钮高得多，是方便点按的大按钮","73":"TabIndex 0，按 Tab 键时它是第一个获得焦点的控件","74":"按钮上显示的文字「扫描控制器」","75":"背景跟随系统视觉样式，按钮是系统主题的渐变而非死板纯色","76":["把 Click 事件接到 Form1.cs 的 button1_Click，事件接线就写在这里","+= 是「订阅」：一个事件可以挂多个处理者，点一下全部依次执行，想摘掉用 -=。new System.EventHandler 是把方法包成委托对象的标准写法，方法签名必须是 void(object, EventArgs)。这就是「点按钮会跑哪个方法」的唯一依据。"],"77":"分隔注释，下面这一段讲的是 listBox1","78":"段名注释，ListBox 在设计师里的名字","79":"分隔注释的收尾行，纯 // 没有内容","80":"字体与按钮一致：微软雅黑 9 点、字符集 134 简体中文","81":["FormattingEnabled 置 true，启用 ListBox 的显示格式化","开启后每一项都先用 TypeConverter 转成显示文本再画，等于每次刷新多走一遍字符串格式化；只装字符串时可忽略，若装自定义对象想显示友好文本，就得靠它或重写 ToString。"],"82":["ItemHeight=20：每一项占 20 像素高，配 9 点微软雅黑的行高","它与字体大小是脱钩的两个数，字体调大而这里不改，文字会被裁。Size 给的 124 也不是 20 的整数倍，ListBox 默认 IntegralHeight=true 会尽量只显示整项，实际高度可能被吸附成 120（未验证实际吸附值）。"],"83":"左上角 (12,84)，贴着窗体左边，在下方按钮行之上","84":"外间距 3,4,3,4，与其它控件保持一致","85":"Name 为 listBox1，运行时靠这个字段访问控件","86":"尺寸 382×124：只占左侧一列，右边整片留给关节角显示","87":"TabIndex 1，按 Tab 时第二个停在这里","88":"分隔注释，为下面 button2 那一段开头","89":"段名注释，下面这段属于 button2","90":"分隔注释的收尾行，下面一行换成 button2 的名字","91":"字体微软雅黑 9 点、字符集 134，与前面按钮一致","92":["Location (229,216)：与 button1 的 (12,219) 对不齐，y 差 3 像素","两个按钮本应同一条水平线，216 与 219 的差不是肉眼看不出的抖动，而是看着「有点歪」的错位；另外 x=229 减去 button1 右边缘（12+165=177）还空出 52 像素没用上。这两个值都是手拖留下的，不是算出来的。"],"93":"外间距 3,4,3,4，与 button1 相同","94":"Name 为 button2，运行时就是 this.button2","95":"尺寸 165×52，与 button1 一模一样，只有 y 没对齐","96":"TabIndex 2，Tab 键顺序排在 listBox1 之后","97":"按钮显示文字「连接控制器」","98":"背景跟随系统视觉样式，与 button1 表现一致","99":"Click 接到 button2_Click，点下去就去连第一台控制器","100":"分隔注释，为下面 button3 那一段开头","101":"段名注释，下面这段属于 button3","102":"分隔注释的收尾行，纯 // 无内容","103":"字体微软雅黑 9 点、字符集 134","104":"左上角 (623,37)：跑到窗体右上的空白区，不在下方按钮行","105":"外间距 3,4,3,4","106":"Name 为 button3","107":"尺寸 164×52，比其它按钮窄 1 像素，肉眼基本看不出","108":"TabIndex 3，Tab 键顺序在 button2 之后","109":"按钮文字「读取六轴姿态」","110":"背景跟随系统视觉样式","111":"Click 接到 button3_Click，只负责手动读一次姿态","112":"分隔注释，为下面 label1 那一段开头","113":"段名注释，下面这段属于 label1","114":"分隔注释的收尾行，下面进入 label1 本体","115":["AutoSize=true：标签宽高随文字自动适应，Size 只是设计器的记录值","所以下面那行 Size(32,20) 并不构成约束——那两个数字是设计器按字体算出来写进文件的，运行时控件会自己撑到文字宽度。没设 Text 之前这种标签几乎只剩几个像素宽，这也是设计师里标签特别难拖准的原因。"],"116":"左上角 (642,164)：这是六行显示区第一行「J1 :」的位置","117":"Name 为 label1","118":"Size 32×20 只是设计器按文字算出的记录值，AutoSize 下不强制","119":"TabIndex 4，Tab 键先停标签再停输入框","120":"标签文字「J1 :」，冒号前的空格是为了跟数字错开","121":"分隔注释，下面这段属于 txtJ1 输入框","122":"段名注释，输入框在设计师里的名字","123":"分隔注释的收尾行，下面开始设 txtJ1 的属性","124":"左上角 (690,160)，六个框共用 x=690，靠 y 排成六行","125":"Name 为 txtJ1，Form1.cs 里的 this.txtJ1 就是它","126":"尺寸 67×27，够显示 -123.45 这类数值，高度是单行框默认外形","127":"TabIndex 5，紧跟在 label1 的 4 后面","128":"分隔注释，为下面 txtJ2 那一段开头","129":"段名注释，下面这段属于 txtJ2","130":"分隔注释的收尾行，下面进入 txtJ2 的属性","131":"左上角 (690,193)：与第一行差 33 像素，正好一行","132":"Name 为 txtJ2","133":"尺寸 67×27，与 txtJ1 完全一致，六个框等宽等高","134":"TabIndex 7，注意 6 被下面的 label2 占了","135":"分隔注释，下面这段属于 label2 标签","136":"段名注释，这一段的标签显示「J2 :」","137":"分隔注释的收尾行，下面开始 label2 的属性","138":"AutoSize=true，标签宽高随文字自动撑开","139":"左上角 (641,196)：比 label1 的 x 少 1 像素，手拖的抖动","140":"Name 为 label2","141":"Size 32×20，AutoSize 下的记录值","142":"TabIndex 6，排在 txtJ2 的 7 之前","143":"标签文字「J2 :」","144":"分隔注释，为下面 txtJ4 那一段开头","145":"段名注释，下面这段属于 txtJ4——先有 txtJ4 后有 txtJ3","146":"分隔注释的收尾行，下面进入 txtJ4 的属性","147":"左上角 (690,261)：第四行，x 与其它五个框一致","148":"Name 为 txtJ4","149":"尺寸 67×27，六框等宽等高","150":"TabIndex 11，Tab 顺序里排第四个数","151":"分隔注释，下面这段属于 label3 标签","152":"段名注释陷阱：label3 显示的其实是第 4 轴","153":"分隔注释的收尾行，下面开始 label3 的属性","154":"AutoSize=true，标签宽高随文字自动撑开","155":"左上角 (641,264)：比 txtJ4 的 261 低 3 像素，视觉上更整齐","156":"Name 为 label3","157":"Size 32×20，AutoSize 下的记录值","158":"TabIndex 10，比 txtJ4 的 11 早一位","159":"文字是「J4 :」——变量名是 3，内容却是第 4 轴","160":"分隔注释，为下面 txtJ3 那一段开头","161":"段名注释，下面这段属于 txtJ3","162":"分隔注释的收尾行，下面进入 txtJ3 的属性","163":"左上角 (690,228)：第三行，比上一行差 35，比别处多 2","164":"Name 为 txtJ3","165":"尺寸 67×27，与其它五个框一致","166":"TabIndex 9，排在 label4 的 8 之后","167":"分隔注释，下面这段属于 label4 标签","168":"段名注释陷阱：label4 显示的其实是第 3 轴","169":"分隔注释的收尾行，下面开始 label4 的属性","170":"AutoSize=true，标签宽高随文字自动撑开","171":"左上角 (642,232)：x 回到 642 那一列，与 label1 相同","172":"Name 为 label4","173":"Size 32×20，AutoSize 下的记录值","174":"TabIndex 8，比 txtJ3 的 9 早一位","175":"文字是「J3 :」——变量名是 4，内容却是第 3 轴","176":"分隔注释，为下面 txtJ6 那一段开头","177":"段名注释，下面这段属于 txtJ6","178":"分隔注释的收尾行，下面进入 txtJ6 的属性","179":"左上角 (690,327)：六行里最下面那一行","180":"Name 为 txtJ6","181":"尺寸 67×27，六框等宽等高","182":"TabIndex 15，六个框里最后被 Tab 到的","183":"分隔注释，下面这段属于 label5 标签","184":"段名注释陷阱：label5 显示的其实是第 6 轴","185":"分隔注释的收尾行，下面开始 label5 的属性","186":"AutoSize=true，标签宽高随文字自动撑开","187":"左上角 (641,330)：最低的标签，比 txtJ6 低 3 像素","188":"Name 为 label5","189":"Size 32×20，AutoSize 下的记录值","190":"TabIndex 14，比 txtJ6 的 15 早一位","191":"文字是「J6 :」——变量名是 5，内容却是第 6 轴","192":"分隔注释，为下面 txtJ5 那一段开头","193":"段名注释，下面这段属于 txtJ5","194":"分隔注释的收尾行，下面进入 txtJ5 的属性","195":"左上角 (690,294)：第五行，夹在 J4 与 J6 之间","196":"Name 为 txtJ5","197":"尺寸 67×27，与其它五个框一致","198":"TabIndex 13，比 label6 的 12 晚，Tab 会先跳标签","199":"分隔注释，下面这段属于 label6 标签","200":"段名注释陷阱：label6 显示的其实是第 5 轴","201":"分隔注释的收尾行，下面开始 label6 的属性","202":"AutoSize=true，标签宽高随文字自动撑开","203":"左上角 (642,298)：x 又回到 642 那一列","204":"Name 为 label6","205":"Size 32×20，AutoSize 下的记录值","206":"TabIndex 12，六组标签里最小，Tab 会先停这里","207":"文字是「J5 :」——六行显示区到这里结束","208":"分隔注释，为下面 label7（单位「度」）那一段开头","209":"分块注释：标记下面这段属性属于 label7","210":"注释分隔空行，与上一行组成 label7 的标题块","211":["AutoSize=true 让标签的宽高随文字自动收缩，位置只由 Location 决定","所以下面 Size 里的 24×20 并非硬约束，而是设计器按当前字体量出来的结果；如果改成 AutoSize=false 再改 Text，文字会被裁掉。这也是六个标签只写坐标就能和文本框对上的原因"],"212":"定位 (763,164)：x 在文本框右侧 6 像素处，y 对准 txtJ1","213":"字段名 label7，设计器与 Controls 集合靠它认出这个控件","214":"记录量得的尺寸 24×20：宽正好一个汉字，高 20 等于 9pt 雅黑行高","215":"Tab 顺序 16，排在 txtJ1(5) 之后；标签不能获焦点，实际不参与 Tab 跳转","216":"标签文字就是一个「度」字，作为 J1 数值的单位提示","217":"注释分隔空行，下面开始 label8","218":"分块注释：标记下面这段属性属于 label8","219":"注释分隔空行，与上一行组成 label8 的标题块","220":"同 label7：AutoSize=true，尺寸随「度」字自动收缩","221":"定位 (763,196)，x 与 label7 对齐成一列，y 对准 txtJ2","222":"字段名 label8，供设计器与 Controls 集合识别","223":"尺寸 24×20，与 label7 完全相同（同一个字、同一字体量出来的）","224":"Tab 顺序 17，与 label7 连号递增，可见是复制粘贴出来的","225":"文字同样是「度」，作为 J2 数值的单位提示","226":"注释分隔空行，下面开始 label9","227":"分块注释：标记下面这段属性属于 label9","228":"注释分隔空行，与上一行组成 label9 的标题块","229":"同前：AutoSize=true，宽度由文字决定","230":"定位 (763,231)，y 对准 txtJ3（文本框 y=228，往下 3 像素）","231":"字段名 label9","232":"尺寸 24×20，与 label7、label8 一致","233":"Tab 顺序 18，继续连号","234":"文字「度」，作为 J3 数值的单位提示","235":"注释分隔空行，下面开始 label10","236":"分块注释：标记下面这段属性属于 label10","237":"注释分隔空行，与上一行组成 label10 的标题块","238":"同前：AutoSize=true","239":"定位 (763,264)，y 对准 txtJ4（文本框 y=261，往下 3 像素）","240":"字段名 label10","241":"尺寸 24×20，与前三个完全相同","242":"Tab 顺序 19，继续连号","243":"文字「度」，作为 J4 数值的单位提示","244":"注释分隔空行，下面开始 label11","245":"分块注释：标记下面这段属性属于 label11","246":"注释分隔空行，与上一行组成 label11 的标题块","247":"同前：AutoSize=true","248":"定位 (763,298)，y 对准 txtJ5（文本框 y=294，往下 4 像素）","249":"字段名 label11","250":"尺寸 24×20，与前四个完全相同","251":"Tab 顺序 20，继续连号","252":"文字「度」，作为 J5 数值的单位提示","253":"注释分隔空行，下面开始 label12","254":"分块注释：标记下面这段属性属于 label12","255":"注释分隔空行，与上一行组成 label12 的标题块","256":"同前：AutoSize=true","257":"定位 (763,330)，y 对准 txtJ6（文本框 y=327，往下 3 像素）","258":"字段名 label12","259":"尺寸 24×20，六个单位标签尺寸完全统一","260":"Tab 顺序 21，六个标签里的最后一个","261":"文字「度」，作为 J6 数值的单位提示","262":"注释分隔空行，下面开始按钮 btnStartRealTime","263":"分块注释：标记下面这段属性属于「开始实时读取」按钮","264":"注释分隔空行，与上一行组成该按钮的标题块","265":"显式设 9pt 微软雅黑（与窗体 Font 相同），删掉外观不变，属冗余","266":"定位 (559,101)：第二排靠左那个，x 起点加宽 164 得右边界 723","267":"外边距 (3,4,3,4)，只在被放进布局容器时才生效，这里无实际影响","268":"字段名 btnStartRealTime，Form1.cs 同名处理方法靠它挂接","269":"尺寸 164×52，比「扫描控制器」的 165×52 窄 1 像素，高度相同","270":"Tab 顺序 22，排在所有标签和文本框之后","271":"按钮文字「开始实时读取」，用户看到的就是这五个字","272":"true 表示底色仍交给系统主题绘制，不自绘纯色背景","273":"把 Click 接到 btnStartRealTime_Click，点一下就启动定时器","274":"注释分隔空行，下面开始「停止实时读取」按钮","275":"分块注释：标记下面这段属性属于「停止实时读取」按钮","276":"注释分隔空行，与上一行组成该按钮的标题块","277":"同样显式设 9pt 微软雅黑，与左边按钮保持字形一致","278":["定位 (729,101)：与左边按钮 559+164=723 只隔 6 像素，视觉上是一对","两按钮宽度都是 164，靠 6 像素间隙区分先后，而不是贴成一条长按钮。这个 6 像素是手工摆的常量，AutoScaleMode=Font 会把两处坐标一起等比放大，所以比例关系在别的 DPI 下仍成立，但初始设计时它就是「看着顺眼」的估值，不是算出来的间距规范"],"279":"外边距 (3,4,3,4)，与其余按钮的默认值一致","280":"字段名 btnStopRealTime，对应 Form1.cs 里的同名处理方法","281":"尺寸 164×52，与「开始实时读取」完全一样，保证两按钮等高","282":"Tab 顺序 23，紧接在开始按钮之后","283":"按钮文字「停止实时读取」","284":"true：背景交系统主题绘制，保持原生按钮观感","285":"Click 接到 btnStopRealTime_Click，方法体只有 Stop 加弹框","286":"注释分隔空行，下面开始三个右键菜单对象","287":"分块注释：标记下面这段属于 contextMenuStrip1","288":"注释分隔空行，与上一行组成该菜单的标题块","289":"菜单项图标缩放尺寸 20×20，本程序没有图标，等于没效果","290":"字段名 contextMenuStrip1","291":["Size=(61,4)：高度 4 是关键证据——每多一个菜单项至少加二十几像素，4 表示里面一个项都没有","所以这三个 ContextMenuStrip 是空壳：没有 ToolStripItem，即使弹出来也是空白。61 是空菜单的最小宽度量测值。它们只在 57~59 行被塞进 components 容器，Dispose 时跟着释放，除此之外再无用处"],"292":"注释分隔空行，下面开始 contextMenuStrip2","293":"分块注释：标记下面这段属于 contextMenuStrip2","294":"注释分隔空行，与上一行组成该菜单的标题块","295":"图标缩放尺寸同样 20×20，设计器默认值","296":"字段名 contextMenuStrip2，与第一个只差编号","297":"尺寸 (61,4)，和 contextMenuStrip1 完全相同，同样是空菜单","298":"注释分隔空行，下面开始 contextMenuStrip3","299":"分块注释：标记下面这段属于 contextMenuStrip3","300":"注释分隔空行，与上一行组成该菜单的标题块","301":"图标缩放尺寸 20×20，第三个也一样","302":"字段名 contextMenuStrip3","303":"尺寸 (61,4)：三个空壳菜单完全同构，是拖进来没配置的残留","304":"注释分隔空行，下面开始顶部菜单条 menuStrip2","305":"分块注释：标记下面这段属于菜单条 menuStrip2","306":"注释分隔空行，与上一行组成菜单条的标题块","307":"菜单图标缩放尺寸 20×20；本程序菜单没有图标，这行不起作用","308":"Items.AddRange：一次挂入整个菜单项数组，比逐个 Add 少几次布局","309":"数组里只装了 toolStripMenuItem2，所以菜单条上只有一项","310":"定位 (0,0)：钉在客户区左上角，正好压在窗体顶边","311":"字段名 menuStrip2；编号从 2 起，说明设计器里曾有过 menuStrip1","312":"尺寸 966×28：宽等于 ClientSize，28 是 9pt 字体行高加内边距","313":"Tab 顺序 30，全文最大值，即排在 Tab 链的最后","314":"Text 值是「menuStrip2」，只是设计器占位名，标题栏不显示它","315":"注释分隔空行，下面开始菜单项 toolStripMenuItem2","316":"分块注释：标记下面这段属于顶级菜单项 toolStripMenuItem2","317":"注释分隔空行，与上一行组成菜单项的标题块","318":"DropDownItems.AddRange：挂入下拉子项，参数是项数组","319":"数组里只有 toolStripMenuItem4，所以点开「12231」只有一个子项","320":"字段名 toolStripMenuItem2","321":"尺寸 68×24：68 是「12231」五个字符按当前字体量出的宽度","322":"菜单显示文字是「12231」，纯测试数字，没有任何业务含义","323":"把 Click 接到 toolStripMenuItem2_Click，而那个方法是空的","324":"注释分隔空行，下面开始子项 toolStripMenuItem4","325":"分块注释：标记下面这段属于子项 toolStripMenuItem4","326":"注释分隔空行，与上一行组成子项的标题块","327":"字段名 toolStripMenuItem4；编号从 2 跳到 4，说明中途删过一个","328":"尺寸 224×26：224 是下拉菜单的预留宽度，26 是标准菜单行高","329":"文字「12121」，同样是调试残留，点它什么也不会发生","330":"注释分隔空行，下面开始窗体自身的属性","331":"分块注释：从这里起设置 Form1 自己，不再设子控件","332":"注释分隔空行，与上一行组成窗体属性块的标题","333":["AutoScaleDimensions=(9F,20F)：记录设计时的字体度量，即 9pt 微软雅黑一行约 20 像素高","配合下一行的 AutoScaleMode=Font，运行时会把当前字体度量除以 9×20 得到缩放系数，再乘到每个子控件的 Location 与 Size 上。这也解释了前面所有 Margin/Padding 垂直值为什么是 4 而不是 3：设计器按 20 像素字高的比例算出来的，不是随便写的排版数"],"334":"AutoScaleMode=Font：按字体度量而非屏幕像素整体缩放，换机器时界面等比放大","335":"ClientSize=966×569：客户区（不含标题栏与边框）宽高，决定窗口初始大小","336":["Controls.Add(btnStopRealTime)：Add 顺序是从后往前，最后加的 menuStrip2 反而最底","WinForms 层序规则：Controls 集合末尾的元素先绘制、位于 Z 序最底层，Add 就是往末尾追加。这里 25 个控件坐标互不重叠，所以层序看不出差别；一旦把 listBox1 放大到压住按钮，问题才暴露，那时只能改 Add 顺序或调 BringToFront/SendToBack"],"337":"把「开始实时读取」按钮加到窗体，紧接在停止按钮之前","338":"把 label12 加到窗体，六个「度」标签开始倒序上屏","339":"把 label11 加到窗体","340":"把 label10 加到窗体","341":"把 label9 加到窗体","342":"把 label8 加到窗体","343":"把 label7 加到窗体，六个单位标签到此全部挂上","344":"把 txtJ6 加到窗体，文本框组也是从 J6 倒着往 J1 加","345":"把 label5（实际文字是 J6 前缀）加到窗体","346":"把 txtJ5 加到窗体","347":"把 label6（实际文字是 J5 前缀）加到窗体","348":"把 txtJ4 加到窗体","349":"把 label3（实际文字是 J4 前缀）加到窗体","350":"把 txtJ3 加到窗体","351":"把 label4（实际文字是 J3 前缀）加到窗体","352":"把 txtJ2 加到窗体","353":"把 label2 加到窗体","354":"把 txtJ1 加到窗体","355":"把 label1 加到窗体","356":"把「读取六轴姿态」按钮加到窗体，它摆在右上方 (623,37)","357":"把「连接控制器」按钮加到窗体，落在左侧列表下方","358":"把控制器列表 listBox1 加到窗体，占据左上角一大块","359":"把「扫描控制器」按钮加到窗体，是第一个上屏的可见控件","360":"最后加 menuStrip2：它在 Z 序最底，其它控件都盖在它上面","361":["窗体级字体 9pt 微软雅黑、单位 Point；子控件不设 Font 就继承它，txtJ1~txtJ6 正是这种情况","第四个参数 134 是字符集编号 GB2312_CHARSET，中文设计器的固定写法；字号单位取 Point 而不是像素，字体实际高度随系统 DPI 变化，这正是 AutoScaleMode=Font 能生效的前提。把单位改成 Pixel 会改变 AutoScale 的换算基准"],"362":["Icon 从 Form1.resx 的二进制资源取：resources 是第 32 行 new 出来的 ComponentResourceManager，$this.Icon 就是资源键名","资源缺失会直接抛异常而不是回退默认图标，所以删 .resx 或另存图标后忘了保存会让程序一启动就崩；图标只出现在标题栏和任务栏，不参与界面布局"],"363":"窗体自身外边距 (3,4,3,4)：只有被别的容器托管时才有意义，这里无视觉效果","364":"窗体名字 Form1，第 32 行 typeof(Form1) 靠它找到对应资源","365":"StartPosition=CenterScreen：首次显示时居中，不用系统默认位置","366":"标题栏文字「喷涂机械臂数字孪生系统」，是这个程序对外唯一显示的名字","367":["关窗事件接到 Form1_FormClosing：先停定时器，再断开控制器连接","坑：Form1.cs 构造函数第 32 行又写了一次 this.FormClosing += Form1_FormClosing，同一处理者被订阅两次；.NET 事件是多播的，关窗时该方法会连跑两遍。Stop() 与 Disconnect 都幂等，所以不出错但属冗余，正确做法只留一处——在设计器里删掉这行最省事"],"368":"Load 事件接到 Form1_Load，可那个方法是空方法，启动时什么也不做","369":"恢复 menuStrip2 布局：与第 63 行的 SuspendLayout 配对","370":"PerformLayout 让 menuStrip2 立刻按恢复后的尺寸重算菜单项位置","371":"恢复窗体布局，false 表示不递归子控件（各自的布局已分别处理过）","372":"立刻执行一次窗体排版，把控件按最终尺寸摆好，避免显示时跳动","373":"","374":"闭合 InitializeComponent 方法，设计器生成的属性赋值到此结束","375":"","376":"#endregion：结束「Windows 窗体设计器生成的代码」这段折叠区","377":"","378":"声明「扫描控制器」按钮字段，private、无初始化，只占一个引用","379":"声明控制器列表 listBox1 字段，与第 34 行 new 的是同一个对象","380":"声明「连接控制器」按钮字段","381":"声明「读取六轴姿态」按钮字段","382":"声明 J1 前缀标签 label1 字段","383":"声明 txtJ1 字段，Form1.cs 里用它显示 poseData.J1","384":"声明 txtJ2 字段，显示 J2 角度","385":"声明 label2 字段（J2 前缀标签）","386":"声明 txtJ4 字段：它排在 txtJ3 之前，与编号顺序不一致但无影响","387":"声明 label3 字段，而它其实是 J4 的前缀标签（名字与编号错位）","388":"声明 txtJ3 字段","389":"声明 label4 字段，它其实是 J3 的前缀标签","390":"声明 txtJ6 字段","391":"声明 label5 字段，而它其实是 J6 的前缀标签","392":"声明 txtJ5 字段","393":"声明 label6 字段，它其实是 J5 的前缀标签","394":"声明 label7 字段，即第一个「度」单位标签","395":"声明 label8 字段，第二个单位标签","396":"声明 label9 字段","397":"声明 label10 字段","398":"声明 label11 字段","399":"声明 label12 字段，六个单位标签到此声明完","400":"声明「开始实时读取」按钮字段","401":"声明「停止实时读取」按钮字段","402":"声明 contextMenuStrip1 字段：空菜单，删掉不影响任何功能","403":"声明 contextMenuStrip2 字段，同样是空壳","404":"声明 contextMenuStrip3 字段，同样是空壳","405":"声明顶部菜单条 menuStrip2 字段","406":"声明菜单项 toolStripMenuItem2 字段（文字「12231」）","407":"声明子菜单项 toolStripMenuItem4 字段（文字「12121」）","408":"闭合 partial class Form1：这个类的另一半写在 Form1.cs 里","409":"闭合命名空间 ABB_Digital_Twin，设计器文件到此结束"}},"overview":{"pitch":"<b>ABB Digital Twin<\/b> 是一个 C# /.NET Framework 4.8 / WinForms 桌面程序，窗体标题写着「喷涂机械臂数字孪生系统」。它真正做的事只有一件：<b>扫描控制器 → 匿名登录 → 每 500 毫秒读一次六个关节角 → 显示在 6 个文本框里<\/b>。","pitch2":"没有 3D 模型、没有末端位姿显示、没有反向控制。「孪生」两个字是标题，不是功能。7 个源文件共 921 行，分三层（连接 / 读取 / DTO / 界面）分得是对的，缺的只是功能本身。","badges":[{"t":"C# / .NET Framework 4.8","cls":"acc"},{"t":"WinForms","cls":"acc"},{"t":"ABB PCSDK 6.08","cls":"acc"},{"t":"7 文件 / 921 行","cls":""},{"t":"x86 位元","cls":""},{"t":"只读监视器","cls":"warn"}],"flow":[{"file":"program","line":19,"title":"Program.Main → Application.Run(new Form1())","desc":"程序从这行进入 Windows 消息循环，窗口出现；这行不返回，直到主窗体关闭。"},{"file":"designer","line":367,"title":"设计器里把按钮的 Click 挂到方法上","desc":"扫描/连接/读取/开始/停止五个按钮的 += 都写在 InitializeComponent() 里，这是「点了之后执行哪段」的唯一答案。"},{"file":"form","line":60,"title":"button1_Click → ScanControllers","desc":"UI 层把活交给设备层；注意这是在 UI 线程上同步调用的。"},{"file":"conn","line":42,"title":"NetworkScanner.Scan()（设备层）","desc":"局域网广播发现控制器，同步阻塞数秒 —— 这几秒窗体会「未响应」。"},{"file":"conn","line":126,"title":"CreateFrom + Logon（建对象、匿名登录）","desc":"先 ControllerFactory.CreateFrom 建连接对象，再 controller.Logon(UserInfo.DefaultUser) 以匿名用户登录，拿到控制器的 mastership。"},{"file":"reader","line":37,"title":"mechUnit.GetPosition() 读六轴关节角","desc":"返回 JointTarget，真正的角度在 .RobAx（RobJoint）里；外轴单元时 .RobAx 是空的。"},{"file":"reader","line":41,"title":"mechUnit.GetPosition(CoordinateSystemType.World) 读 TCP 位姿","desc":"只对 TCP Robot 型单元有效；它和关节角读取在同一个 try 里，它抛异常会把整次读取判失败。"},{"file":"pose","line":11,"title":"摊平成 DTO 的 14 个字段","desc":"把 PCSDK 的嵌套结构抄进 AbbRobotPoseData，界面层从此不需要认识 PCSDK 类型。"},{"file":"form","line":149,"title":"只把 J1~J6 写进 6 个 TextBox","desc":"TCP 的 X/Y/Z 和四元数 Q1~Q4 已经被读出来了，但一行都没显示 —— 这是「数字孪生」最该补的地方。"}],"conclusions":[{"t":"程序性质：姿态轮询监视器，不是数字孪生。没有 3D、没有反向控制、没有仿真联动。","file":"form","line":149},{"t":"DTO 里 14 个字段只用了 6 个：TCP 三轴、四元数四个、机械单元名，全是有赋值、没人读的死字段。","file":"pose","line":18},{"t":"只读 ActiveMechanicalUnit（当前激活的那一个）。PCSDK 的 MotionSystem.MechanicalUnits 能取全部单元，代码没写。","file":"reader","line":28},{"t":"GetPosition(CoordinateSystemType) 只支持 TCP Robot 型单元；当前单元若是变位机/外轴，该调用抛异常，关节角明明能读也一起失败。","file":"reader","line":41},{"t":"更隐蔽的一条：外轴单元时 GetPosition() 把关节角塞进 ExtAx，RobAx 是 RobJoint.Empty，于是 J1~J6 静默显示 0.00 而程序说「读取成功」。","file":"reader","line":38},{"t":"所有网络调用都在 UI 线程：扫描（广播，数秒）和 GetPosition（同步往返）直接从事件处理函数里调 → 期间窗体「未响应」。","file":"form","line":60},{"t":"永远只连第 0 台：button2_Click 固定调 ConnectFirstController()，完全忽略 listBox1 的选择，哪怕当选中的是第 2 台。","file":"form","line":90},{"t":"跨网段不可用：只做子网广播，没有手工 IP 输入。PCSDK 有 NetworkScanner.AddRemoteController(string)，代码没调用。","file":"conn","line":39},{"t":"异常处理丢诊断：三个 catch 都只取 ex.Message，没有异常类型、没有 InnerException、没有日志文件。","file":"reader","line":68},{"t":"FormClosing 被订阅两次（Designer.cs 第 367 行 + Form1.cs 第 32 行），因为处理幂等所以无害，但属冗余。","file":"designer","line":367},{"t":"位元隐患：csproj 里 Debug 是 PlatformTarget=x86，Release 是 AnyCPU —— Debug 验过能跑，不保证 Release 能跑。","file":"form","line":129}],"notes":["阅读建议：先看「概念」页建立直觉 → 回「逐行」从 Program.cs 往下读（只有 22 行）→ 重点啃 AbbRobotPoseReader.cs 那 74 行（整个程序的实质都在里面）→ 最后看「问题」页。","界面上的 6 个 TextBox 就是全部输出。想知道「程序到底显示了什么」，看 Form1.cs 第 149~154 行就够了。","本讲解器的源码是从原 zip 里逐字节抽出来的，行号与原始工程完全一致，可以直接对着工程看。","设计器代码（Form1.Designer.cs，409 行）是设计师自动生成的，逐行读完一遍即可，不必记住；真正要改布局时再看。"]},"concepts":[{"title":"① DTO 与三层：为什么要把数据「抄一遍」","paras":["DTO（Data Transfer Object）就是「只装数据、不带逻辑」的类。这里的 AbbRobotPoseData 有 14 个自动属性，没有任何方法。","为什么要多这一层？因为 PCSDK 返回的是 JointTarget / RobTarget 这种嵌套结构（struct 套 struct）。界面层若直接持有它们，就要求界面读懂 PCSDK；抄进 DTO 之后，界面只认识 AbbRobotPoseData —— 换成别的机器人品牌，只要换掉 Reader，界面一行不用改。","代价是「抄」的时候容易漏：本程序抄了 TCP 和四元数，却没在界面上显示，白抄。"],"example":"AbbRobotPoseData.cs:11  public double J1 { get; set; }","file":"pose","line":9,"label":"DTO 定义"},{"title":"② struct 与 class：RobJoint、Pos 是值类型","paras":["PCSDK 里 RobJoint、Pos、Orient、JointTarget、RobTarget 都是 struct（值类型）。赋值时是整块拷贝，不是共享引用。","所以 poseData.J1 = robJoint.Rax_1 只是把一个 float 拷进 double；robJoint 自己留在栈上，方法返回就没了 —— 这就是为什么必须在方法里「当场抄完」。","反过来说，Controller、NetworkScanner、ControllerInfo 是 class（引用类型），要小心生命周期：用完了要 Dispose，否则网络连接和事件订阅会留着。"],"example":"public struct RobJoint { private float _rax_1; ... }","file":"reader","line":38,"label":"robJoint 取值"},{"title":"③ 事件与委托：按钮怎么会「知道」调哪个方法","paras":["WinForms 的按钮有一个 Click 事件，类型是 EventHandler（本质是「能存方法引用的变量」）。","设计器里写 this.button1.Click += new System.EventHandler(this.button1_Click); 就是把方法挂到这个事件上。一个事件可以挂多个处理者（+= 可以写多次），触发时按挂的顺序全部执行。","这也解释了 FormClosing 那个小坑：Form1.cs 构造函数和设计器各挂了一次同一个方法，于是关闭窗口时它跑两遍。"],"example":"this.button1.Click += new System.EventHandler(this.button1_Click);","file":"designer","line":76,"label":"Click 接线"},{"title":"④ 两种 Timer：为什么这里必须用 WinForms 的","paras":["System.Windows.Forms.Timer 的 Tick 在 UI 线程上跑，可以直接改 TextBox.Text；代价是 Tick 里干重活会把界面卡住。","System.Threading.Timer / System.Timers.Timer 的回调在线程池线程上跑，直接碰控件会抛「线程间操作无效」的跨线程异常。","本程序用了 WinForms 的 Timer（安全），但 Tick 里调用的 GetPosition 是同步网络往返，于是每 500ms 界面就有一次小停顿；网络慢时会明显卡顿。正确的是任务型写法：Task.Run 读数据 + Invoke 回 UI。"],"example":"poseTimer.Tick += PoseTimer_Tick;   // 同一个 UI 线程","file":"form","line":29,"label":"Tick 订阅"},{"title":"⑤ 同步阻塞 = 界面假死","paras":["WinForms 的界面刷新、按钮响应、窗口拖动，全靠主线程的消息循环。主线程一旦在某个函数里等网络，消息就没人处理，窗口变白、标题栏「未响应」。","本程序里有两个典型的阻塞点：NetworkScanner.Scan()（广播发现，数秒）和每次 GetPosition()（一次控制器往返）。两者都从事件处理函数直接调用。","所以点了「扫描控制器」之后，你会看到窗口卡住几秒才有结果 —— 这不是死机，是设计问题。"],"example":"scanner.Scan();   // 同步广播，几秒","file":"conn","line":42,"label":"扫描阻塞"},{"title":"⑥ 四元数：Q1 是标量，不是 x","paras":["ABB 的姿态用单位四元数表示，四个分量 Q1~Q4。ABB 的约定是 Q1 = 标量部分 w，Q2/Q3/Q4 = 向量部分 x/y/z（在 PCSDK 里由 Orient.FillFromEulerAngles 把 u0→Q1、u1→Q2…映射，可反编译核实）。",".NET 的 System.Numerics.Quaternion 构造函数顺序是 (x, y, z, w)，直接 new Quaternion(Q1,Q2,Q3,Q4) 会得到错误姿态 —— 这是移植时最常见的错。","另外 PCSDK 的 Orient 自带 ToEulerAngles(out x, out y, out z) 和 FillFromEulerAngles(x,y,z)，要显示欧拉角根本不用自己推公式。"],"example":"robTarget.Rot.Q1..Q4 ；Orient.ToEulerAngles(out x,out y,out z)","file":"reader","line":58,"label":"Q1~Q4 赋值"},{"title":"⑦ 坐标系：World / Base / Tool / WorkObject","paras":["同一个 TCP 位置，在不同参考系下数字完全不同。PCSDK 的 CoordinateSystemType 让你选参考系：World（大地坐标）、Base（机器人基座）、Tool（工具坐标）、WorkObject（工件坐标）等。","本程序固定用 World，所以拿到的 X/Y/Z 是「相对机器人基座世界系」的毫米值。","注意 GetPosition(CoordinateSystemType) 这个重载只支持 TCP Robot 型机械单元；外轴/变位机要用无参的 GetPosition() 取关节值或另行处理 ExtAx。"],"example":"mechUnit.GetPosition(CoordinateSystemType.World)","file":"reader","line":41,"label":"World 位姿"}],"issues":[{"sev":"FATAL","title":"Debug 与 Release 的位元不一致：Release 可能一运行就崩","detail":"csproj 里 Debug 配置是 PlatformTarget=x86，Release 配置却是 AnyCPU。PCSDK 的三个 DLL 是 32 位原生程序集，AnyCPU 在有 64 位系统的机器上会以 64 位进程启动，加载 32 位 DLL 时抛 BadImageFormatException（「试图加载格式不正确的程序」）。于是「Debug 里验过能跑」完全不能证明「Release 能跑」。","fix":"把 Release 配置的 PlatformTarget 也改成 x86，两个配置统一；顺手把 Prefer32Bit 一并显式设上。","loc":[]},{"sev":"FATAL","title":"安装工程是 VS 模板残留，装出来路径是「厂商为 QQ 邮箱」的目录","detail":"Setup1.vdproj 里 ProductName = \"Setup1\"、Manufacturer = \"1571024199@qq.com\"。安装时的默认目录因此变成 [ProgramFiles]\\1571024199@qq.com\\Setup1；依赖收集还把几十个 System.*.dll（.NET Standard facade）卷进了安装包。交付给别人装会很难看，也容易和已有文件冲突。","fix":"改 ProductName / Manufacturer / ManufacturerUrl，清掉误收的 System.*.dll 依赖，只留 PCSDK 三个 DLL 与本程序 exe。VS2022 默认不支持 .vdproj，需要装 Microsoft Visual Studio Installer Projects 扩展。","loc":[]},{"sev":"BAD","title":"网络调用全在 UI 线程：扫描和轮询期间窗口「未响应」","detail":"NetworkScanner.Scan()（局域网广播发现，通常数秒）和 mechUnit.GetPosition()（一次控制器往返）都由按钮事件或 Timer.Tick 直接调用，而它们跑在 UI 线程上。Windows 的消息循环被阻塞，窗口就变白、标题栏出现「未响应」，用户会以为程序死了。","fix":"把耗时段放进 Task.Run，再 Invoke 回 UI 更新控件；或者改成 PCSDK 的订阅式接口（事件回调 + 自己切回 UI 线程）。扫描/连接期间还要禁用按钮，避免重复点击。","loc":[["form",60],["conn",42],["form",129]]},{"sev":"BAD","title":"永远只连第 0 台控制器，列表选择形同虚设","detail":"button2_Click 固定调用 ConnectFirstController()，内部写死 ConnectControllerByIndex(0)。listBox1.SelectedIndex 从头到尾没被读过 —— 界面上让你选，程序根本不看。更糟的是列表里每台控制器占 7 行（含一个空行），SelectedIndex 本来也不能直接当控制器序号用（要除以 7）。","fix":"现成方法 ConnectControllerByIndex 已经在，只要改成 ConnectControllerByIndex(listBox1.SelectedIndex / 7, out message) 即可；更好的是把列表换成 ListView 或 DataGridView，一台一行，选中即映射。","loc":[["form",90],["form",62],["conn",98],["conn",104]]},{"sev":"BAD","title":"GetPosition(CoordinateSystemType) 只支持 TCP Robot 型单元，抛异常会连累关节角","detail":"PCSDK 文档写明该重载「Supports mechanical unit type TCP Robot only」。当前激活单元若是变位机/外轴（MultiAxes / SingleAxis），这一步会抛异常；而它和关节角读取写在同一个 try 里，catch 一兜，整次读取就被判失败，界面上关节角明明已经读到了也不显示。","fix":"先判断 mechUnit.Type == MechanicalUnitType.TcpRobot 再调世界坐标位姿；或把两次 GetPosition 分别放进各自的 try，让关节角和 TCP 位姿互不影响。","loc":[["reader",41],["reader",66]]},{"sev":"BAD","title":"更隐蔽的一条：外轴单元时 J1~J6 静默显示 0.00，程序还说「成功」","detail":"PCSDK 的 MechanicalUnit.GetPosition()（无参）在单元不是 TCP Robot 时，把关节值放进 JointTarget.ExtAx，而 RobAx 是 RobJoint.Empty（全 0）。本程序只取 jointTarget.RobAx，于是六轴全是 0，但 message 依然是「读取机器人姿态成功。」、readOk 依然是 true —— 使用者看到一排 0.00，会以为机器人在原点。","fix":"读之前判单元类型；外轴场景改读 jointTarget.ExtAx（ExtJoint 的 Eax_a..Eax_f），并按类型决定显示哪些轴。","loc":[["reader",37],["reader",38],["reader",58]]},{"sev":"BAD","title":"TCP 位姿和四元数读了却从不显示：14 个字段只用 6 个","detail":"Reader 把 TcpX/TcpY/TcpZ、Q1~Q4、MechanicalUnitName 都算好了，Form1 只写 J1~J6 六个 TextBox。数字孪生最需要的末端位置（mm）和姿态，读出来就扔了。","fix":"在 Form1.UpdateRobotPoseDisplay 里补 3 个 TextBox 显示 TcpX/Y/Z（F2，单位 mm）；姿态用 robTarget.Rot.ToEulerAngles(out x, out y, out z) 转成欧拉角再显示（PCSDK 自带，不用自己推公式）。","loc":[["form",149],["pose",18],["pose",22]]},{"sev":"BAD","title":"异常处理丢诊断信息：只取 ex.Message","detail":"三处 catch 全部写成 message = \"…失败：\" + ex.Message。没有异常类型、没有 InnerException、没有堆栈、没有日志文件。而 PCSDK 内部会把底层 RPC 异常再包一层，真正的 HResult 与原因藏在 InnerException 里 —— 用户只会看到一句没头没脑的英文。现场排障基本没法做。","fix":"至少拼上 ex.GetType().Name 和 ex.InnerException?.Message，并把完整 ToString() 追加写进 %LOCALAPPDATA%\\ABB_Digital_Twin\\log.txt；别只弹 MessageBox。","loc":[["reader",68],["conn",63],["conn",142]]},{"sev":"BAD","title":"在 Timer.Tick 里弹模态 MessageBox，会把轮询拖垮","detail":"PoseTimer_Tick 读失败后弹 MessageBox.Show(...)。模态框会阻塞消息循环，定时器事件继续排队，用户关掉一个又冒一个；如果控制器反复断连，界面基本不可用。","fix":"Tick 里只把状态写进状态栏/Label（并变红），不弹窗；弹窗留给用户主动点击的动作。","loc":[["form",50]]},{"sev":"BAD","title":"扫描期间不禁用按钮，可以重复触发连接/登录","detail":"button1/button2 在执行期间既不 Disable 自身也不加忙标志，用户可以连点。连点「连接控制器」会反复 CreateFrom + Logon，而控制器同一时刻只给一个用户 mastership，日志里会出现莫名其妙的登录冲突。","fix":"进事件先 button.Enabled = false，finally 里恢复；或者用一个 isBusy 标志拦住重入。","loc":[["form",54],["form",75],["conn",129]]},{"sev":"WARN","title":"跨网段不可用：没有手工 IP 入口","detail":"只做局域网子网广播发现。控制器在另一个网段、或防火墙拦了广播时，永远扫不到。PCSDK 提供 NetworkScanner.AddRemoteController(string address)（静态方法）可以直接指定 IP，代码没调用。","fix":"加一个「手工 IP」输入框，调 NetworkScanner.AddRemoteController(ip) 后再 Scan()；顺手记住上次成功的 IP。","loc":[["conn",39],["conn",42]]},{"sev":"WARN","title":"FormClosing 被订阅两次","detail":"Designer.cs 第 367 行订阅了 this.FormClosing += Form1_FormClosing，Form1.cs 构造函数第 32 行又订阅了一次。关闭窗口时处理方法执行两遍：poseTimer.Stop() 与 DisconnectController() 都是幂等的，所以没出事，但这属于隐性冗余 —— 将来在处理方法里加了「弹确认框」或「写日志」就会看出问题。","fix":"只保留一处（把设计器里那行删掉，因为构造函数里已经有）。","loc":[["designer",367],["form",32]]},{"sev":"WARN","title":"死代码成群：空类、空事件、空方法、测试菜单、三个空右键菜单","detail":"Class1.cs 整个是模板残留；Form1_Load 是空方法；toolStripLabel1_Click 挂的控件在界面上根本不存在；toolStripMenuItem2_Click 是空的；菜单项文字写着 12231 / 12121；contextMenuStrip1~3 的 Size 是 (61,4)，里面一个菜单项都没有，也没有任何控件把它们当右键菜单用。","fix":"全部删除。删除前确认没有事件订阅引用它们（这几处都没有），删掉零影响。","loc":[["class1",9],["form",159],["form",190],["form",195],["designer",322],["designer",291]]},{"sev":"WARN","title":"全部绝对坐标布局，没有任何 Anchor / Dock / TableLayout","detail":"窗体和控件都用 Location + Size 的绝对像素摆放（ClientSize 966×569，AutoScaleMode=Font，基准 9F/20F）。换个 DPI、换台笔记本、用户改个字体大小，控件就会错位或重叠；窗口拉大缩小时所有控件原地不动，右下角大片空白。另外 button1 的 y=219 而 button2 的 y=216，已经先天错位 3 像素。","fix":"改用 TableLayoutPanel/FlowLayoutPanel 划分区域，或至少给每个控件设 Anchor；把按钮高度、间距抽成统一常量。","loc":[["designer",335],["designer",92],["designer",69]]},{"sev":"WARN","title":"double 装 float、F2 只给两位小数：精度观感上有损失","detail":"RobJoint.Rax_1 和 Pos.X/Y/Z 在 PCSDK 里都是 float（约 7 位有效数字），赋给 double 只是换更大的容器，不会变准。显示时 ToString(\"F2\") 又只留两位小数，看起来像 0.00 的轴，其实可能是 0.004。","fix":"显示用 F3（0.001 度）更符合示教器习惯；要知道精度下限就记住 float 约 7 位有效数字，别在 double 上做等值比较。","loc":[["pose",11],["form",149]]}],"links":[{"a":["program",19],"b":["designer",29],"label":"Application.Run(new Form1()) 触发构造函数 → InitializeComponent() 才把所有控件 new 出来。程序启动顺序就是这两跳。"},{"a":["designer",76],"b":["form",54],"label":"设计器里把 button1.Click 挂到 button1_Click；运行时点「扫描控制器」执行的就是 Form1.cs 第 54 行。"},{"a":["form",60],"b":["conn",32],"label":"界面层把活交给设备层：ScanControllers(out message)。注意是在 UI 线程上同步调用。"},{"a":["conn",42],"b":["conn",39],"label":"先 new NetworkScanner()，再 scanner.Scan() 做局域网广播发现；结果通过 scanner.Controllers 取出。"},{"a":["form",90],"b":["conn",98],"label":"button2_Click 调 ConnectFirstController() —— 写死第 0 台。这个包装方法只做一件事：转调 ConnectControllerByIndex(0)。"},{"a":["conn",104],"b":["conn",126],"label":"先 DisconnectController() 清旧连接，再 ControllerFactory.CreateFrom(info) 建新对象；CreateFrom 本身不联网。"},{"a":["conn",129],"b":["reader",28],"label":"controller.Logon(UserInfo.DefaultUser) 匿名登录成功后，MotionSystem.ActiveMechanicalUnit 才有意义 —— 读位姿的前提是已经登录。"},{"a":["form",129],"b":["reader",14],"label":"UpdateRobotPoseDisplay 把 abbService.CurrentController 和两个 out 变量交给 ReadRobotPose，这是 UI 层与数据层唯一的接口。"},{"a":["reader",37],"b":["pose",11],"label":"jointTarget.RobAx 的六个 Rax_n 抄进 DTO 的 J1~J6（float → double 只是换容器）。"},{"a":["reader",41],"b":["pose",18],"label":"robTarget.Trans.X/Y/Z（mm）与 Rot.Q1~Q4 抄进 DTO 的 TcpX/Y/Z 与 Q1~Q4。"},{"a":["pose",18],"b":["form",149],"label":"反向看这条：UpdateRobotPoseDisplay 只读了 J1~J6，TcpX/Y/Z 与 Q1~Q4 从此再没人碰 —— 死字段链。"},{"a":["reader",68],"b":["form",141],"label":"Reader 的 catch 把失败原因塞进 message，Form1 在 showErrorMessage=true 时把它弹出来；Timer 那条路径传 false，所以不弹。"},{"a":["form",50],"b":["form",48],"label":"Tick 读失败时先 poseTimer.Stop() 再弹窗：停表是为了不重复报错，但弹窗本身是模态的，会把消息循环堵住。"},{"a":["designer",367],"b":["form",32],"label":"同一个 FormClosing 事件被订阅两次（设计器一次、构造函数一次）。处理方法幂等，所以只是冗余，不是 bug。"},{"a":["form",95],"b":["conn",154],"label":"关窗时 Form1_FormClosing 先 Stop 定时器再 DisconnectController()：Logoff 释放 mastership、Dispose 释放连接，finally 里把 controller 置 null。"}]}</script>
+<script>
+(function(){
+"use strict";
+var D = JSON.parse(document.getElementById("DATA").textContent);
+var $ = function(id){ return document.getElementById(id); };
+var state = { tab:"home", file:(D.files[0]||{}).id, inline:false, allOpen:false, fs:12.5, sheetLine:0 };
+var LASTKEY = "abbdt.reader.v1";
+
+/* ---------- 工具 ---------- */
+function esc(s){
+  return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function noteOf(file, n){
+  var m = D.lines[file] || {};
+  var v = m[String(n)];
+  if (v === undefined || v === null || v === "") return null;
+  return Array.isArray(v) ? { short:v[0]||"", detail:v[1]||"" } : { short:v, detail:"" };
+}
+function noteText(file, n, withDetail){
+  var o = noteOf(file, n);
+  if (!o) return "";
+  return o.short + (withDetail && o.detail ? "  " + o.detail : "");
+}
+function fileMeta(id){
+  for (var i=0;i<D.files.length;i++){ if (D.files[i].id===id) return D.files[i]; }
+  return D.files[0];
+}
+function blockOf(file, n){
+  var bs = D.blocks[file] || [];
+  for (var i=0;i<bs.length;i++){ if (n>=bs[i].a && n<=bs[i].b) return bs[i]; }
+  return null;
+}
+function fmtText(t){
+  if (!t) return "";
+  var parts = String(t).split(/\n+/);
+  var out = "";
+  for (var i=0;i<parts.length;i++){
+    if (parts[i]) out += "<p>" + esc(parts[i]) + "</p>";
+  }
+  return out;
+}
+/* 极简 C# 高亮 */
+var KW = ("using namespace class struct public private protected internal static void bool double float int string var new return if else try catch finally foreach for while out null true false this base partial using get set override sealed abstract const readonly in is as throw object byte").split(" ");
+var TY = ("System Windows Forms Math String Convert List Set Math Exception EventArgs Timer Button TextBox Label ListBox MenuStrip ToolStripMenuItem ContextMenuStrip ComponentResourceManager Font Point Size PointF Padding Color Icon Drawing EventHandler FormClosingEventHandler GraphicsUnit FontStyle AutoScaleMode FormStartPosition AutoScaleDimensions IContainer ComponentResourceManager Controller MechanicalUnit JointTarget RobJoint RobTarget Orient Pos ExtJoint ConfData ControllerInfo ControllerInfoCollection NetworkScanner ControllerFactory UserInfo AbbRobotPoseData AbbRobotPoseReader AbbControllerConnection Form1 Program Class1 MechanicalUnitType CoordinateSystemType MotionSystem RapidDomain MotionDomain Discovery").split(" ");
+var KWS = {}, TYS = {};
+for (var i=0;i<KW.length;i++) KWS[KW[i]] = 1;
+for (var j=0;j<TY.length;j++) TYS[TY[j]] = 1;
+function hl(line){
+  var out = "", i = 0, n = line.length;
+  while (i < n){
+    var ch = line.charAt(i);
+    if (ch === "/" && line.charAt(i+1) === "/"){
+      out += '<span class="cm">' + esc(line.slice(i)) + "</span>"; break;
+    }
+    if (ch === '"'){
+      var k = i+1, buf = '"';
+      while (k < n){
+        if (line.charAt(k) === "\\"){ buf += line.substr(k,2); k += 2; continue; }
+        buf += line.charAt(k);
+        if (line.charAt(k) === '"'){ k++; break; }
+        k++;
+      }
+      out += '<span class="st">' + esc(buf) + "</span>"; i = k; continue;
+    }
+    if (ch === "#" ){
+      var m = /^#[A-Za-z]+/.exec(line.slice(i));
+      if (m){ out += '<span class="at">' + esc(m[0]) + "</span>"; i += m[0].length; continue; }
+    }
+    if (/[A-Za-z_]/.test(ch)){
+      var w = /^[A-Za-z_][A-Za-z0-9_]*/.exec(line.slice(i))[0];
+      var cls = KWS[w] ? "kw" : (TYS[w] ? "ty" : "");
+      var nxt = line.slice(i+w.length, i+w.length+1);
+      if (!cls && (nxt === "(" || nxt === ".")) cls = "";
+      if (!cls && /^[A-Z]/.test(w)) cls = "ty";
+      out += cls ? '<span class="'+cls+'">' + esc(w) + "</span>" : esc(w);
+      i += w.length; continue;
+    }
+    if (/[0-9]/.test(ch)){
+      var d = /^[0-9][0-9a-fA-FxX.]*[fFdDmMuUlL]?/.exec(line.slice(i))[0];
+      out += '<span class="nm">' + esc(d) + "</span>"; i += d.length; continue;
+    }
+    out += esc(ch); i++;
+  }
+  return out || " ";
+}
+
+/* ---------- 页签 ---------- */
+function setTab(t){
+  state.tab = t;
+  var views = ["home","code","concept","sim","issues"];
+  for (var i=0;i<views.length;i++){
+    var v = $("v-"+views[i]);
+    if (v) v.hidden = (views[i] !== t);
+  }
+  var btns = document.querySelectorAll("#tabs button");
+  for (var k=0;k<btns.length;k++){
+    if (btns[k].getAttribute("data-tab") === t) btns[k].className = "on"; else btns[k].className = "";
+  }
+  $("subbar").className = (t === "code") ? "" : "hide";
+  if (t !== "code"){ $("toolPanel").className = "hide"; }
+  $("ctxName").textContent = (t === "code") ? fileMeta(state.file).name + " · " + fileMeta(state.file).lines + " 行" : "";
+  if (t === "code") renderCode();
+  if (t === "concept") renderConcept();
+  if (t === "sim") renderSim();
+  if (t === "issues") renderIssues();
+  if (t === "home") renderHome();
+  save();
+}
+
+/* ---------- 首页 ---------- */
+function renderHome(){
+  var o = D.overview || {};
+  var h = "";
+  h += '<div class="hero"><p>' + (o.pitch || "") + "</p>";
+  if (o.pitch2) h += '<p>' + o.pitch2 + "</p>";
+  h += '<div class="badges">' + (o.badges||[]).map(function(b){ return '<span class="pill '+(b.cls||"")+'">'+esc(b.t)+"</span>"; }).join("") + "</div></div>";
+
+  h += '<div class="card"><h2><em>01</em>七个文件，谁管什么</h2>';
+  h += '<p class="tip">点任意文件直接跳到它的逐行讲解。</p><div class="flist">';
+  for (var i=0;i<D.files.length;i++){
+    var f = D.files[i];
+    h += '<button class="fitem" data-file="'+f.id+'"><span class="fn">'+esc(f.name)+'</span><span class="fr">'+esc(f.role)+'</span><span class="fl">'+f.lines+" 行</span></button>";
+  }
+  h += "</div></div>";
+
+  h += '<div class="card"><h2><em>02</em>一次读取的完整链路</h2><p class="tip">点任意一步跳到对应代码行。</p><div class="flow">';
+  var fl = o.flow || [];
+  for (var k=0;k<fl.length;k++){
+    var s = fl[k];
+    h += '<button class="fstep" data-jump="'+s.file+":"+s.line+'"><span class="dot">'+(k+1)+'</span><span><span class="tt">'+esc(s.title)+'</span><br><span class="ds">'+esc(s.desc||"")+"</span></span></button>";
+  }
+  h += "</div></div>";
+
+  if (o.conclusions && o.conclusions.length){
+    h += '<div class="card"><h2><em>03</em>结论速览</h2><div class="concl">';
+    for (var c=0;c<o.conclusions.length;c++){
+      var it = o.conclusions[c];
+      h += '<div class="c-item"><em>'+(c+1)+'</em><span>'+esc(it.t);
+      if (it.file) h += ' <button class="jump" data-jump="'+it.file+":"+it.line+'">看代码</button>';
+      h += "</span></div>";
+    }
+    h += "</div></div>";
+  }
+  if (o.notes && o.notes.length){
+    h += '<div class="card"><h2><em>04</em>读之前先知道</h2>';
+    for (var q=0;q<o.notes.length;q++) h += "<p>" + esc(o.notes[q]) + "</p>";
+    h += "</div>";
+  }
+  $("v-home").innerHTML = h;
+}
+
+/* ---------- 代码 ---------- */
+function renderChips(){
+  var h = "";
+  for (var i=0;i<D.files.length;i++){
+    var f = D.files[i];
+    h += '<button class="chip'+(f.id===state.file?" on":"")+'" data-file="'+f.id+'">'+esc(f.name)+"</button>";
+  }
+  $("fileChips").innerHTML = h;
+}
+function renderCode(){
+  var f = fileMeta(state.file), src = String(f.src||"").split("\n");
+  var bs = D.blocks[state.file] || [];
+  var h = "";
+  for (var i=0;i<bs.length;i++){
+    var b = bs[i];
+    h += '<div class="blk'+(state.allOpen?"":"")+'" data-bi="'+i+'">';
+    h += '<div class="blk-h" data-fold="1"><span class="bk-caret">▾</span><span class="bk-t">'+esc(b.title)+'</span><span class="bk-b">'+esc(b.brief||"")+'</span><span class="bk-r">'+b.a+"-"+b.b+"</span></div>";
+    h += '<div class="blk-d">' + fmtText(b.detail);
+    if (b.api) h += '<div class="api"><b>PCSDK</b>' + esc(b.api) + "</div>";
+    if (b.gotcha) h += '<div class="gotcha"><b>坑</b>' + esc(b.gotcha) + "</div>";
+    h += "</div><div class=\"lns\">";
+    for (var n=b.a;n<=b.b;n++){
+      var code = src[n-1] === undefined ? "" : src[n-1];
+      var o = noteOf(state.file, n);
+      h += '<div class="ln'+(o?" has":"")+'" data-l="'+n+'"><span class="g">'+n+'</span><span class="c">'+hl(code)+"</span></div>";
+      if (state.inline && o){
+        h += '<div class="ln-note"><i>↳</i>' + esc(o.short) + (o.detail ? '<span class="d">'+esc(o.detail)+"</span>" : "") + "</div>";
+      }
+    }
+    h += "</div></div>";
+  }
+  $("codeWrap").innerHTML = h;
+  if (!state.allOpen) collapseAll(true);
+  renderMap();
+}
+function collapseAll(on){
+  var els = document.querySelectorAll("#codeWrap .blk");
+  for (var i=0;i<els.length;i++){
+    if (on) els[i].className = "blk folded"; else els[i].className = "blk";
+  }
+}
+function renderMap(){
+  var bs = D.blocks[state.file] || [], h = "";
+  for (var i=0;i<bs.length;i++){
+    h += '<button data-bmap="'+bs[i].a+'"><span class="r">'+bs[i].a+"-"+bs[i].b+'</span><span class="t">'+esc(bs[i].title)+"</span></button>";
+  }
+  $("bmap").innerHTML = h;
+}
+
+/* ---------- 定位 ---------- */
+function jump(file, line, silent){
+  if ($("searchWrap").className.indexOf("hide") < 0) $("searchWrap").className = "hide";
+  state.file = file;
+  renderChips();
+  setTab("code");
+  var b = blockOf(file, line);
+  var el = document.querySelector('#codeWrap .ln[data-l="'+line+'"]');
+  if (b){
+    var blk = el ? el.parentNode.parentNode : null;
+    if (blk) blk.className = "blk";
+  }
+  el = document.querySelector('#codeWrap .ln[data-l="'+line+'"]');
+  if (el){
+    var top = el.getBoundingClientRect().top - $("v-code").getBoundingClientRect().top + $("v-code").scrollTop - 90;
+    $("v-code").scrollTo(0, Math.max(0, top));
+    el.className = el.className.replace(" flash","") + " flash";
+    setTimeout(function(){ if (el) el.className = el.className.replace(" flash",""); }, 1200);
+  }
+  if (!silent) closeSheet();
+  save();
+}
+
+/* ---------- 抽屉 ---------- */
+function openSheet(line){
+  state.sheetLine = line;
+  paintSheet();
+  $("mask").className = "on";
+  $("sheet").className = "on";
+}
+function closeSheet(){
+  $("mask").className = "";
+  $("sheet").className = "";
+}
+function nearestNote(from, dir){
+  var m = D.lines[state.file] || {}, n = from + dir;
+  while (n >= 1 && n <= 20000){
+    if (m[String(n)] !== undefined && m[String(n)] !== "") return n;
+    n += dir;
+    if (n < 1) break;
+  }
+  return 0;
+}
+function paintSheet(){
+  var f = fileMeta(state.file), n = state.sheetLine;
+  var src = String(f.src||"").split("\n");
+  var o = noteOf(state.file, n), b = blockOf(state.file, n);
+  $("shWho").textContent = f.name + " · 第 " + n + " 行";
+  var h = "<pre class=\"code\">" + esc(src[n-1] === undefined ? "" : src[n-1]) + "</pre>";
+  h += "<div class=\"sh-note\">" + (o ? esc(o.short) + (o.detail ? '<span class="d">'+esc(o.detail)+"</span>" : "") : "（这一行没有单独讲解：空行或纯括号，作用见下方「块」说明）") + "</div>";
+  if (b){
+    h += '<div class="sh-blk"><div class="bt">◆ ' + esc(b.title) + "（" + b.a + "-" + b.b + " 行）</div><div class=\"bd\">" + esc(b.brief||"") + "</div></div>";
+    if (b.detail) h += '<div class="sh-blk"><div class="bd">' + esc(b.detail) + "</div></div>";
+    if (b.gotcha) h += '<div class="sh-blk" style="border-color:#4a3a12"><div class="bt" style="color:#d29922">⚠ 坑</div><div class="bd">' + esc(b.gotcha) + "</div></div>";
+  }
+  $("shBody").innerHTML = h;
+  $("shBody").scrollTop = 0;
+  var p = nearestNote(n, -1), q = nearestNote(n, 1);
+  $("shPrev").disabled = !p; $("shNext").disabled = !q;
+  $("shPrev").textContent = p ? "⟨ 第 " + p + " 行" : "⟨ 到头了";
+  $("shNext").textContent = q ? "第 " + q + " 行 ⟩" : "到尾了 ⟩";
+  var all = document.querySelectorAll("#codeWrap .ln");
+  for (var i=0;i<all.length;i++){ all[i].className = all[i].className.replace(" on",""); }
+  var cur = document.querySelector('#codeWrap .ln[data-l="'+n+'"]');
+  if (cur) cur.className += " on";
+}
+
+/* ---------- 概念 ---------- */
+function renderConcept(){
+  var h = '<div class="card"><h2><em>01</em>七组概念，先建立直觉</h2><p class="tip">每张卡片末尾都能跳到代码里的实际用法。</p><div class="pair">';
+  var cs = D.concepts || [];
+  for (var i=0;i<cs.length;i++){
+    var c = cs[i];
+    h += '<div class="pcard"><h3>'+esc(c.title)+"</h3>";
+    for (var k=0;k<(c.paras||[]).length;k++) h += "<p>" + esc(c.paras[k]) + "</p>";
+    if (c.example) h += '<div class="ex">' + esc(c.example) + "</div>";
+    if (c.file) h += '<div style="margin-top:8px"><button class="jump" data-jump="'+c.file+":"+c.line+'">看代码 · '+esc(c.label||"")+"</button></div>";
+    h += "</div>";
+  }
+  h += '</div></div>';
+  h += '<div class="card"><h2><em>02</em>块与块之间怎么接起来</h2><p class="tip">这些是跨文件、跨块的调用关系；点两端都能跳。</p><div class="rel">';
+  var ls = D.links || [];
+  for (var r=0;r<ls.length;r++){
+    var L = ls[r];
+    h += '<div class="rel-item"><div class="lr"><button class="jump" data-jump="'+L.a[0]+":"+L.a[1]+'">'+esc(fileMeta(L.a[0]).name)+":"+L.a[1]+'</button><span>→</span><button class="jump" data-jump="'+L.b[0]+":"+L.b[1]+'">'+esc(fileMeta(L.b[0]).name)+":"+L.b[1]+"</button></div><div class=\"lb\">"+esc(L.label)+"</div></div>";
+  }
+  h += "</div></div>";
+  $("v-concept").innerHTML = h;
+}
+
+/* ---------- 问题清单 ---------- */
+function renderIssues(){
+  var order = { "FATAL":0, "BAD":1, "WARN":2, "NOte":3 };
+  var is = (D.issues||[]).slice().sort(function(a,b){ return (order[a.sev]||9)-(order[b.sev]||9); });
+  var h = '<div class="card"><h2><em>!</em>' + is.length + " 条问题</h2><p class=\"tip\">按严重度排序：FATAL 会直接崩/错，BAD 会给出错误的数或卡死，WARN 是隐患与死代码。</p>";
+  h += '<div class="badges" style="margin-bottom:10px"><span class="pill bad">FATAL '+is.filter(function(x){return x.sev==="FATAL";}).length+'</span><span class="pill warn">BAD '+is.filter(function(x){return x.sev==="BAD";}).length+'</span><span class="pill">WARN '+is.filter(function(x){return x.sev==="WARN";}).length+"</span></div></div>";
+  for (var i=0;i<is.length;i++){
+    var t = is[i];
+    h += '<div class="it"><div class="hd"><span class="pill '+(t.sev==="FATAL"?"bad":(t.sev==="BAD"?"warn":"acc"))+'">'+t.sev+'</span><span class="t">'+esc(t.title)+"</span></div>";
+    h += "<p>" + esc(t.detail) + "</p>";
+    if (t.fix) h += '<div class="fix">改法：' + esc(t.fix) + "</div>";
+    h += '<div class="loc">';
+    for (var k=0;k<(t.loc||[]).length;k++) h += '<button class="jump" data-jump="'+t.loc[k][0]+":"+t.loc[k][1]+'">'+esc(fileMeta(t.loc[k][0]).name)+":"+t.loc[k][1]+"</button>";
+    h += "</div></div>";
+  }
+  $("v-issues").innerHTML = h;
+}
+
+/* ---------- 运行模拟 ---------- */
+var SIM = {
+  scanned:false, connected:false, running:false, timerId:null, t:0,
+  unit:"TcpRobot", link:"online", listSel:-1, msg:"", exec:null, j:[12.3,-8.1,24.9,0.0,31.2,0.0], rows:[]
+};
+function simForm(){
+  function b(id,txt,x,y,w,h2,cls){ return '<div class="w btn'+(cls||"")+'" data-sim="'+id+'" style="left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+h2+'px">'+txt+"</div>"; }
+  function lb(id,txt,x,y,w,c){ return '<div class="w lb" data-sim="'+id+'" style="left:'+x+'px;top:'+y+'px;width:'+w+'px;height:20px">'+txt+"</div>"; }
+  function tb(id,x,y,w,h2){ return '<div class="w tb" style="left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+h2+'px">'+(state.jv&&state.jv[id]!==undefined?state.jv[id]:"")+"</div>"; }
+  var h = "";
+  h += '<div class="w title" style="left:0;top:0;width:966px;height:30px">喷涂机械臂数字孪生系统 <b style="margin-left:8px;font-size:11px;color:#777">— v1.0.0.0</b></div>';
+  h += '<div class="w menu" style="left:0;top:30px;width:966px;height:24px">12231</div>';
+  h += '<div class="w lst" id="simList" style="left:12px;top:84px;width:382px;height:124px">没有扫描到 ABB 控制器。\n请确认电脑和控制柜在同一网络。</div>';
+  h += b("scan","扫描控制器",12,219,165,52);
+  h += b("connect","连接控制器",229,216,165,52);
+  h += b("read","读取六轴姿态",623,37,164,52);
+  h += b("start","开始实时读取",559,101,164,52);
+  h += b("stop","停止实时读取",729,101,164,52);
+  var ys=[160,193,228,261,294,327];
+  for (var i=0;i<6;i++){
+    h += lb("l"+(i+1),"J"+(i+1)+" :",641,ys[i],45);
+    h += tb("t"+(i+1),690,ys[i],67,27);
+    h += lb("u"+(i+1),"度",763,ys[i],28);
+  }
+  return h;
+}
+function renderSim(){
+  var h = '<div class="card"><h2><em>▶</em>按 Form1.Designer.cs 的真实坐标还原</h2>';
+  h += '<p class="tip">控件位置、尺寸、文字都取自设计器的绝对坐标（966×569）。点按钮会真实走一遍程序逻辑，下面同步显示"此刻在执行哪段代码"。</p>';
+  h += '<div class="simbar">';
+  h += '<button class="sw'+(SIM.unit==="TcpRobot"?" on":"")+'" data-unit="TcpRobot">活动单元：TCP 机器人</button>';
+  h += '<button class="sw'+(SIM.unit==="MultiAxes"?" on":"")+'" data-unit="MultiAxes">活动单元：变位机/外轴</button>';
+  h += '<button class="sw'+(SIM.link==="offline"?" on":"")+'" data-link="1">控制器已断网</button>';
+  h += "</div>";
+  h += '<div class="stage" id="stage"><div class="f1" id="f1">' + simForm() + "</div></div>";
+  h += '<div class="readout" id="ro"></div>';
+  h += '<div class="exec" id="execBox"></div>';
+  h += '<div class="logbox" id="simLog">就绪。先点「扫描控制器」。</div>';
+  h += "</div>";
+  $("v-sim").innerHTML = h;
+  fitStage(); paintSim();
+  if (SIM.rows.length) paintList();
+}
+function fitStage(){
+  var st = $("stage"), f1 = $("f1");
+  if (!st || !f1) return;
+  var k = st.clientWidth / 966;
+  st.style.height = Math.round(569 * k) + "px";
+  f1.style.transform = "scale(" + k + ")";
+  SIM.k = k;
+}
+function simLog(t){
+  var el = $("simLog");
+  if (!el) return;
+  SIM.msg = t;
+  el.textContent = t;
+  el.scrollTop = el.scrollHeight;
+}
+function paintList(){
+  var el = $("simList");
+  if (!el) return;
+  var txt = SIM.rows.length ? SIM.rows.join("\n") : "没有扫描到 ABB 控制器。\n请确认电脑和控制柜在同一网络。";
+  el.textContent = txt;
+  if (SIM.listSel >= 0){
+    el.style.background = "#cfe3ff";
+    setTimeout(function(){ el.style.background = "#fff"; }, 260);
+  }
+}
+function setField(id, v){
+  var el = document.querySelector('#f1 .w.tb:nth-of-type(1)');
+  var box = null;
+  var all = document.querySelectorAll("#f1 .w");
+  for (var i=0;i<all.length;i++){
+    var m = all[i].getAttribute("style")||"";
+    if (all[i].classList.contains("tb") && all[i].style.left === "690px" && all[i].style.top === (String(160+ (id-1)*0 + 0)) ){}
+  }
+  return box;
+}
+function paintSim(){
+  var all = document.querySelectorAll("#f1 .w.tb");
+  var ys = [160,193,228,261,294,327];
+  for (var i=0;i<all.length;i++){
+    var el = all[i];
+    var ty = parseInt(el.style.top, 10);
+    var idx = ys.indexOf(ty);
+    if (idx < 0) continue;
+    var val = SIM.j[idx];
+    var dead = (SIM.unit === "MultiAxes");
+    el.textContent = val.toFixed(2);
+    el.style.color = dead ? "#c00" : "#000";
+  }
+  var ro = $("ro");
+  if (ro){
+    var h = "";
+    for (var k=0;k<6;k++){
+      var dead2 = (SIM.unit === "MultiAxes");
+      h += '<div class="ro'+(dead2?" dead":"")+'"><div class="k">J'+(k+1)+'</div><div class="v">'+(dead2?"0.00":SIM.j[k].toFixed(2))+"</div></div>";
+    }
+    ro.innerHTML = h;
+  }
+  var ex = $("execBox");
+  if (ex){
+    if (SIM.exec){
+      ex.innerHTML = '<div class="who">▶ 此刻执行：' + esc(SIM.exec.file) + " : " + SIM.exec.line + "</div><div class=\"what\">" + esc(SIM.exec.desc) + '</div><div style="margin-top:7px"><button class="jump" data-jump="'+SIM.exec.fid+":"+SIM.exec.line+'">跳到这段代码</button></div>';
+    } else {
+      ex.innerHTML = '<div class="who">▶ 尚未开始</div><div class="what">点上面的按钮试试。</div>';
+    }
+  }
+  var bs = document.querySelectorAll("#f1 .w.btn");
+  for (var q=0;q<bs.length;q++) bs[q].classList.remove("hot");
+}
+function execAt(fid, line, desc){
+  var meta = fileMeta(fid);
+  SIM.exec = { fid:fid, file:meta.name, line:line, desc:desc };
+  paintSim();
+}
+function simStop(msg){
+  SIM.running = false;
+  if (SIM.timerId){ clearInterval(SIM.timerId); SIM.timerId = null; }
+  if (msg) simLog(msg);
+}
+function simTick(){
+  SIM.t += 0.5;
+  if (SIM.unit === "MultiAxes"){
+    SIM.j = [0,0,0,0,0,0];
+  } else {
+    var b0 = [12.3,-8.1,24.9,0.0,31.2,0.0];
+    for (var i=0;i<6;i++){
+      SIM.j[i] = b0[i] + Math.sin(SIM.t * (0.5 + i*0.13) + i) * (4 + i*1.7);
+    }
+  }
+  paintSim();
+}
+function simRead(showErr){
+  if (SIM.link === "offline"){
+    execAt("reader", 68, "catch 分支：控制器已断网 → GetPosition 抛异常 → 只留下 ex.Message");
+    if (showErr) simLog("弹窗：读取机器人姿态失败：连接已断开");
+    return false;
+  }
+  if (!SIM.connected){
+    execAt("reader", 21, "controller == null → 直接返回「请先连接 ABB 控制器。」");
+    if (showErr) simLog("弹窗：请先连接 ABB 控制器。");
+    return false;
+  }
+  execAt("reader", 37, "mechUnit.GetPosition() 读关节角 → RobAx");
+  simTick();
+  if (SIM.unit === "MultiAxes"){
+    execAt("reader", 38, "外轴单元时 RobAx 是 RobJoint.Empty（全 0），代码只看 RobAx → J1~J6 全是 0，但仍返回「成功」");
+    simLog("读取机器人姿态成功。—— 但六轴全是 0.00（外轴单元被塞进 ExtAx，代码没取）");
+  } else {
+    execAt("reader", 41, "mechUnit.GetPosition(CoordinateSystemType.World) 读 TCP 位姿（本程序读完就扔）");
+    simLog("读取机器人姿态成功。J1~J6 已写入 6 个 TextBox；TCP 位姿与四元数被读出来但没有显示。");
+  }
+  return true;
+}
+function simStart(){
+  simStop("");
+  SIM.running = true;
+  SIM.timerId = setInterval(function(){
+    execAt("form", 690, "PoseTimer_Tick：每 500ms 调一次 UpdateRobotPoseDisplay(false)");
+    var ok = simRead(false);
+    if (!ok){
+      simStop("读取失败 → poseTimer.Stop()，并弹「实时读取已停止，请检查 ABB 控制器连接状态。」");
+    }
+  }, 500);
+}
+
+/* ---------- 事件 ---------- */
+document.addEventListener("click", function(e){
+  var t = e.target;
+  function up(sel){
+    var n = e.target;
+    while (n && n !== document.body){
+      if (n.matches && n.matches(sel)) return n;
+      n = n.parentNode;
+    }
+    return null;
+  }
+  var chip = up("[data-file]");
+  if (chip){
+    state.file = chip.getAttribute("data-file");
+    renderChips();
+    if (state.tab !== "code") setTab("code"); else renderCode();
+    $("v-code").scrollTo(0,0);
+    save();
+    return;
+  }
+  var jp = up("[data-jump]");
+  if (jp){
+    var v = jp.getAttribute("data-jump").split(":");
+    jump(v[0], parseInt(v[1],10));
+    return;
+  }
+  var ln = up("#codeWrap .ln");
+  if (ln){
+    openSheet(parseInt(ln.getAttribute("data-l"),10));
+    return;
+  }
+  var fh = up("[data-fold]");
+  if (fh){
+    var blk = fh.parentNode;
+    blk.className = (blk.className.indexOf("folded") >= 0) ? "blk" : "blk folded";
+    return;
+  }
+  var bm = up("[data-bmap]");
+  if (bm){ jump(state.file, parseInt(bm.getAttribute("data-bmap"),10)); return; }
+  var tb = up("#tabs button");
+  if (tb){ setTab(tb.getAttribute("data-tab")); return; }
+  var sim = up("[data-sim]");
+  if (sim){
+    var act = sim.getAttribute("data-sim");
+    if (act === "scan"){
+      execAt("conn", 43, "NetworkScanner.Scan()：同步广播扫描（界面上会像卡住几秒）");
+      SIM.rows = [
+        "========== 控制器 1 ==========",
+        "IP: 192.168.1.101",
+        "系统名: IRC5_1",
+        "RobotWare: 6.08.01",
+        "控制器名: Robot1",
+        "是否虚拟控制器: False",
+        ""
+      ];
+      SIM.rows = SIM.rows.concat([
+        "========== 控制器 2 ==========",
+        "IP: 192.168.1.102",
+        "系统名: VC_Line2",
+        "RobotWare: 6.08.01",
+        "控制器名: Virtual1",
+        "是否虚拟控制器: True",
+        ""
+      ]);
+      SIM.scanned = true;
+      paintList();
+      simLog("扫描成功，共扫描到 2 个控制器。注意列表里每台占 7 行，\nSelectedIndex 不能直接当控制器索引用。");
+    } else if (act === "connect"){
+      execAt("form", 738, "button2_Click → ConnectFirstController()：写死第 0 台，忽略列表选择");
+      if (!SIM.scanned){ simLog("先扫描：控制器数量为 0，会自动补扫一次。"); }
+      SIM.connected = true;
+      SIM.scanned = true;
+      simLog("连接成功！控制器名：Robot1\n系统名：IRC5_1\nIP：192.168.1.101\n（匿名登录，示教器占着 mastership 时会失败）");
+    } else if (act === "read"){
+      execAt("form", 777, "UpdateRobotPoseDisplay(true) → poseReader.ReadRobotPose(...)");
+      simRead(true);
+    } else if (act === "start"){
+      execAt("form", 816, "btnStartRealTime_Click：先试读一次，成功才启动定时器");
+      if (simRead(true)){ simStart(); simLog("已开始实时读取六轴姿态。（每 500ms 一次）"); }
+    } else if (act === "stop"){
+      execAt("form", 833, "btnStopRealTime_Click → poseTimer.Stop()");
+      simStop("已停止实时读取六轴姿态。");
+    }
+    return;
+  }
+  var un = up("[data-unit]");
+  if (un){
+    SIM.unit = un.getAttribute("data-unit");
+    renderSim();
+    simLog(SIM.unit === "MultiAxes"
+      ? "现在「当前活动单元」是变位机：RobAx 会是 RobJoint.Empty，六轴静默显示 0，而且 GetPosition(World) 会抛异常。"
+      : "现在「当前活动单元」是 TCP 机器人。");
+    return;
+  }
+  var lk = up("[data-link]");
+  if (lk){
+    SIM.link = (SIM.link === "offline") ? "online" : "offline";
+    renderSim();
+    simLog(SIM.link === "offline" ? "已模拟控制器断网。" : "已恢复联网。");
+    return;
+  }
+  if (t.id === "btnSearch"){ $("searchWrap").className = ""; $("q").value = ""; $("qRes").innerHTML = '<div class="empty">输入关键词开始搜索（支持代码与讲解文本）</div>'; $("q").focus(); return; }
+  if (t.id === "qClose"){ $("searchWrap").className = "hide"; return; }
+  if (t.id === "btnTools"){ $("toolPanel").className = ($("toolPanel").className === "hide") ? "" : "hide"; return; }
+  if (t.id === "swInline"){ state.inline = !state.inline; t.className = "sw" + (state.inline?" on":""); renderCode(); restoreOpen(); return; }
+  if (t.id === "swAll"){
+    state.allOpen = !state.allOpen; t.className = "sw" + (state.allOpen?" on":"");
+    collapseAll(!state.allOpen); return;
+  }
+  if (t.id === "swMap"){ $("bmapWrap").className = ($("bmapWrap").className === "hide") ? "" : "hide"; return; }
+  if (t.id === "fsUp"){ state.fs = Math.min(20, state.fs + 1); applyFs(); return; }
+  if (t.id === "fsDown"){ state.fs = Math.max(9, state.fs - 1); applyFs(); return; }
+  if (t.id === "mask" || t.id === "shClose"){ closeSheet(); return; }
+  if (t.id === "shPrev"){ var p = nearestNote(state.sheetLine,-1); if (p){ state.sheetLine = p; paintSheet(); jump(state.file,p,true); } return; }
+  if (t.id === "shNext"){ var q2 = nearestNote(state.sheetLine,1); if (q2){ state.sheetLine = q2; paintSheet(); jump(state.file,q2,true); } return; }
+  var sr = up(".sr");
+  if (sr){ var v2 = sr.getAttribute("data-jump").split(":"); $("searchWrap").className = "hide"; jump(v2[0], parseInt(v2[1],10)); return; }
+});
+function restoreOpen(){ /* 内联切换后保持全部块展开，便于通读 */ collapseAll(false); }
+function applyFs(){
+  document.documentElement.style.setProperty("--fs", state.fs + "px");
+  save();
+}
+
+/* ---------- 搜索 ---------- */
+function doSearch(){
+  var q = $("q").value.trim().toLowerCase();
+  var res = $("qRes");
+  if (!q){ res.innerHTML = '<div class="empty">输入关键词开始搜索（支持代码与讲解文本）</div>'; return; }
+  var out = [], total = 0;
+  for (var i=0;i<D.files.length && out.length < 80;i++){
+    var f = D.files[i], src = String(f.src||"").split("\n");
+    for (var n=1;n<=src.length;n++){
+      var code = src[n-1] || "";
+      var nt = noteText(f.id, n, false);
+      if ((code.toLowerCase().indexOf(q) >= 0) || (nt.toLowerCase().indexOf(q) >= 0)){
+        out.push({ fid:f.id, name:f.name, line:n, code:code, note:nt });
+        total++;
+        if (out.length >= 80) break;
+      }
+    }
+  }
+  if (!out.length){ res.innerHTML = '<div class="empty">没找到「' + esc($("q").value) + '」</div>'; return; }
+  var h = "";
+  for (var k=0;k<out.length;k++){
+    var o = out[k];
+    h += '<div class="sr" data-jump="'+o.fid+":"+o.line+'"><div class="lc">'+esc(o.name)+":"+o.line+'</div><div class="cd">'+esc(o.code.trim()||"（空行）")+"</div>"+(o.note?'<div class="nt">'+esc(o.note)+"</div>":"")+"</div>";
+  }
+  if (total > out.length) h += '<div class="empty">结果太多，只显示前 ' + out.length + " 条</div>";
+  res.innerHTML = h;
+}
+
+/* ---------- 记忆 ---------- */
+function save(){
+  try{ localStorage.setItem(LASTKEY, JSON.stringify({ tab:state.tab, file:state.file, inline:state.inline, fs:state.fs })); }catch(e){}
+}
+function load(){
+  try{
+    var raw = localStorage.getItem(LASTKEY);
+    if (!raw) return;
+    var o = JSON.parse(raw);
+    if (o.file) state.file = o.file;
+    if (o.inline) state.inline = true;
+    if (o.fs) state.fs = o.fs;
+    if (o.tab) state.tab = o.tab;
+  }catch(e){}
+}
+
+/* ---------- 启动 ---------- */
+load();
+document.documentElement.style.setProperty("--fs", state.fs + "px");
+$("swInline").className = "sw" + (state.inline?" on":"");
+renderChips();
+$("q").addEventListener("input", doSearch);
+window.addEventListener("resize", function(){ if (state.tab === "sim") fitStage(); });
+window.addEventListener("orientationchange", function(){ setTimeout(function(){ if (state.tab === "sim") fitStage(); }, 250); });
+setTab(state.tab || "home");
+renderHome();
+if (D.files.length && !D.blocks[state.file]) state.file = D.files[0].id;
+})();
+</script>
+</body>
+</html>
