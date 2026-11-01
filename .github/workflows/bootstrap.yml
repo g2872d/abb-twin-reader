@@ -31,6 +31,9 @@ jobs:
             n=$((n+1))
           done < <(find . -maxdepth 1 -type f -name 'app__*' -print0)
           rm -f _MANIFEST.json
+          # 拍平上传时残留的 build.yml（在根目录，不在 .github/workflows/ 下，
+          # 所以删除它不需要 workflows 权限）
+          rm -f .github__workflows__build.yml
           echo "moved $n files"
           echo "--- 结果 ---"
           find . -path ./.git -prune -o -type f -print | sort
