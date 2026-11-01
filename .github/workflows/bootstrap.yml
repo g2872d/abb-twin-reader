@@ -1,0 +1,70 @@
+name: bootstrap-structure
+
+# 一次性引导：把拍平上传的 "路径__文件名" 还原成真实目录结构，
+# 然后直接在同一次运行里把 APK 编出来，避免"GITHUB_TOKEN 推送不触发工作流"的坑。
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  restructure-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore directory structure
+        run: |
+          set -euo pipefail
+          n=0
+          while IFS= read -r -d '' f; do
+            b="$(basename "$f")"
+            target="${b//__//}"
+            mkdir -p "$(dirname "$target")"
+            mv -f "$f" "$target"
+            echo "  $b -> $target"
+            n=$((n+1))
+          done < <(find . -maxdepth 1 -type f -name '*__*' -print0)
+          rm -f _MANIFEST.json
+          echo "moved $n files"
+          echo "--- 结果 ---"
+          find . -path ./.git -prune -o -type f -print | sort
+
+      - name: Commit structure
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "没有变化"; else
+            git commit -m "chore: 还原工程目录结构（bootstrap 自动执行）"
+            git push
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Build debug APK
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Collect APK
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/app-debug.apk out/ABB-Reader-debug.apk
+          ls -l out
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ABB-Reader-apk
+          path: out/*.apk
+          if-no-files-found: error
+          retention-days: 90
